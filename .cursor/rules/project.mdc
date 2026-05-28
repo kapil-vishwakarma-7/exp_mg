@@ -1,0 +1,12 @@
+You are working on a Flutter expense tracker app.
+
+Rules:
+- Use clean architecture
+- Keep files modular
+- Use Provider state management
+- SQLite for storage
+- Minimize dependencies to keep the UI clean and ensure responsive design across devices
+- Never create files larger than 300 lines
+- Reuse widgets
+- Prefer simple UI
+- Do not rewrite working code unnecessarily
