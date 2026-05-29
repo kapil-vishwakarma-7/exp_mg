@@ -21,7 +21,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ExpenseProvider>().fetchExpenses();
+      context.read<ExpenseProvider>().initialize();
     });
   }
 

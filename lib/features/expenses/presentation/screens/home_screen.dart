@@ -8,8 +8,8 @@ import 'analytics_screen.dart';
 import 'profile_screen.dart';
 import 'transactions_screen.dart';
 import '../widgets/balance_card.dart';
-import '../widgets/payment_card.dart';
 import '../widgets/transaction_tile.dart';
+import '../widgets/upcoming_payments_section.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -23,7 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ExpenseProvider>().fetchExpenses();
+      context.read<ExpenseProvider>().initialize();
     });
   }
 
@@ -87,39 +87,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       onAddTap: _openAddExpense,
                     ),
                     const SizedBox(height: 24),
-                    const _SectionHeader(
-                      title: 'Upcoming Payments',
-                      actionText: 'See all',
-                    ),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      height: 210,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: const <Widget>[
-                          PaymentCard(
-                            appName: 'Adobe Premium',
-                            pricePerMonth: '₹2,499',
-                            daysLeft: '2 days left',
-                            isHighlighted: true,
-                            icon: Icons.change_history_rounded,
-                          ),
-                          SizedBox(width: 12),
-                          PaymentCard(
-                            appName: 'Apple Premium',
-                            pricePerMonth: '₹249',
-                            daysLeft: '2 days left',
-                            icon: Icons.apple_rounded,
-                          ),
-                          SizedBox(width: 12),
-                          PaymentCard(
-                            appName: 'Spotify',
-                            pricePerMonth: '₹119',
-                            daysLeft: '5 days left',
-                            icon: Icons.music_note_rounded,
-                          ),
-                        ],
-                      ),
+                    UpcomingPaymentsSection(
+                      refreshToken: provider.refreshVersion,
                     ),
                     const SizedBox(height: 24),
                     _SectionHeader(

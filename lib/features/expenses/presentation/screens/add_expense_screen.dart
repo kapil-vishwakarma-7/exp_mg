@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/expense.dart';
+import '../../models/recurring_data.dart';
 import '../../providers/expense_provider.dart';
 import '../widgets/add_amount_input.dart';
 import '../widgets/category_chip_selector.dart';
 import '../widgets/expense_date_picker.dart';
 import '../widgets/expense_note_input.dart';
 import '../widgets/gradient_save_button.dart';
+import '../widgets/recurring_payment_section.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   const AddExpenseScreen({super.key});
@@ -29,8 +31,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
   final _amountFocusNode = FocusNode();
+
   String _selectedCategory = _categories.first.label;
   DateTime _selectedDate = DateTime.now();
+  RecurringData _recurringData = RecurringData(startDate: DateTime.now());
   bool _isSaving = false;
 
   static const List<CategoryItem> _categories = <CategoryItem>[
@@ -58,9 +62,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     );
 
     if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-      });
+      setState(() => _selectedDate = picked);
     }
   }
 
@@ -79,6 +81,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       return 'Select a category';
     }
 
+    if (_recurringData.isRecurring) {
+      final recurringError = _recurringData.validate();
+      if (recurringError != null) return recurringError;
+    }
+
     return null;
   }
 
@@ -91,24 +98,28 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       return;
     }
 
+    final note = _noteController.text.trim();
+    final title = note.isEmpty ? _selectedCategory : note;
+
     final expense = Expense(
+      title: title,
       amount: double.parse(_amountController.text.trim()),
       category: _selectedCategory,
-      note: _noteController.text.trim(),
-      date: _selectedDate,
+      note: note,
+      date: _recurringData.isRecurring
+          ? _recurringData.startDate
+          : _selectedDate,
     );
 
-    setState(() {
-      _isSaving = true;
-    });
+    setState(() => _isSaving = true);
 
-    final saved = await context.read<ExpenseProvider>().addExpense(expense);
+    final saved = await context.read<ExpenseProvider>().addExpense(
+          expense: expense,
+          recurring: _recurringData.isRecurring ? _recurringData : null,
+        );
 
     if (!mounted) return;
-
-    setState(() {
-      _isSaving = false;
-    });
+    setState(() => _isSaving = false);
 
     if (!saved) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -128,7 +139,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       padding: EdgeInsets.only(bottom: bottomInset),
       child: Container(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.9,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.92,
         ),
         decoration: const BoxDecoration(
           color: Color(0xFFF6F7FB),
@@ -183,9 +194,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     categories: _categories,
                     selectedCategory: _selectedCategory,
                     onSelected: (value) {
-                      setState(() {
-                        _selectedCategory = value;
-                      });
+                      setState(() => _selectedCategory = value);
                     },
                   ),
                   const SizedBox(height: 20),
@@ -194,6 +203,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   ExpenseDatePicker(
                     date: _selectedDate,
                     onTap: _pickDate,
+                  ),
+                  const SizedBox(height: 16),
+                  RecurringPaymentSection(
+                    data: _recurringData,
+                    onChanged: (value) {
+                      setState(() => _recurringData = value);
+                    },
                   ),
                 ],
               ),

@@ -39,6 +39,7 @@ String dateGroupLabel(DateTime date) {
 }
 
 String expenseDisplayTitle(Expense expense) {
+  if (expense.title.isNotEmpty) return expense.title;
   if (expense.note.isNotEmpty) return expense.note;
   return expense.category;
 }

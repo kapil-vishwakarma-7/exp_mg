@@ -37,7 +37,7 @@ class ExpenseCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    expense.category,
+                    expense.title.isNotEmpty ? expense.title : expense.category,
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   if (expense.note.isNotEmpty) ...<Widget>[

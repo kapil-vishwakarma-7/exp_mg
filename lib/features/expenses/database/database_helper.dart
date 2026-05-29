@@ -3,6 +3,9 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../models/expense.dart';
+import '../models/recurring_expense.dart';
+import '../services/recurring_debug.dart';
+import '../utils/recurring_date_utils.dart';
 
 class DatabaseHelper {
   DatabaseHelper._();
@@ -10,8 +13,9 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const String _databaseName = 'expenses.db';
-  static const int _databaseVersion = 1;
+  static const int _databaseVersion = 4;
   static const String tableExpenses = 'expenses';
+  static const String tableRecurringExpenses = 'recurring_expenses';
 
   Database? _database;
 
@@ -29,26 +33,131 @@ class DatabaseHelper {
     return openDatabase(
       path,
       version: _databaseVersion,
-      onCreate: (db, version) async {
-        debugPrint('[DB] Creating expenses table');
-        await db.execute('''
-          CREATE TABLE $tableExpenses(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            amount REAL NOT NULL,
-            category TEXT NOT NULL,
-            note TEXT NOT NULL,
-            date TEXT NOT NULL
-          )
-        ''');
-      },
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
+  }
+
+  Future<void> _onCreate(Database db, int version) async {
+    debugPrint('[DB] onCreate v$version');
+    await _createExpensesTable(db);
+    await _createRecurringExpensesTable(db);
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    debugPrint('[DB] onUpgrade $oldVersion -> $newVersion');
+
+    if (oldVersion < 2) {
+      final columns = await db.rawQuery('PRAGMA table_info($tableExpenses)');
+      final names = columns.map((row) => row['name'] as String).toSet();
+
+      if (!names.contains('title')) {
+        await db.execute('ALTER TABLE $tableExpenses RENAME TO expenses_old');
+        await _createExpensesTable(db);
+        await db.execute('''
+          INSERT INTO $tableExpenses (id, title, amount, category, date, note, created_at)
+          SELECT id,
+                 CASE WHEN note IS NULL OR note = '' THEN category ELSE note END,
+                 amount, category, date,
+                 COALESCE(note, ''),
+                 date
+          FROM expenses_old
+        ''');
+        await db.execute('DROP TABLE expenses_old');
+      }
+
+      await _createRecurringExpensesTable(db);
+    }
+
+    if (oldVersion < 4) {
+      await _normalizeRecurringExpensesTable(db);
+    }
+  }
+
+  /// Ensures [repeat_interval] exists and removes legacy [interval] column.
+  Future<void> _normalizeRecurringExpensesTable(Database db) async {
+    var columns =
+        await db.rawQuery('PRAGMA table_info($tableRecurringExpenses)');
+    if (columns.isEmpty) {
+      await _createRecurringExpensesTable(db);
+      return;
+    }
+
+    var names = columns.map((row) => row['name'] as String).toSet();
+
+    if (!names.contains('repeat_interval')) {
+      debugPrint('[DB] Adding repeat_interval column');
+      await db.execute('''
+        ALTER TABLE $tableRecurringExpenses
+        ADD COLUMN repeat_interval INTEGER NOT NULL DEFAULT 1
+      ''');
+      if (names.contains('interval')) {
+        await db.execute('''
+          UPDATE $tableRecurringExpenses
+          SET repeat_interval = "interval"
+        ''');
+      }
+      names = names.union({'repeat_interval'});
+    }
+
+    if (!names.contains('interval')) return;
+
+    debugPrint('[DB] Rebuilding recurring_expenses (drop legacy interval)');
+    await db.execute(
+      'ALTER TABLE $tableRecurringExpenses RENAME TO recurring_expenses_legacy',
+    );
+    await _createRecurringExpensesTable(db);
+    await db.execute('''
+      INSERT INTO $tableRecurringExpenses (
+        id, title, amount, category, frequency, repeat_interval,
+        start_date, next_due_date, end_date, auto_add, created_at
+      )
+      SELECT
+        id, title, amount, category, frequency,
+        COALESCE(repeat_interval, "interval", 1),
+        start_date, next_due_date, end_date, auto_add, created_at
+      FROM recurring_expenses_legacy
+    ''');
+    await db.execute('DROP TABLE recurring_expenses_legacy');
+  }
+
+  Future<void> _createExpensesTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $tableExpenses(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        amount REAL NOT NULL,
+        category TEXT NOT NULL,
+        date TEXT NOT NULL,
+        note TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  Future<void> _createRecurringExpensesTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $tableRecurringExpenses(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        amount REAL NOT NULL,
+        category TEXT NOT NULL,
+        frequency TEXT NOT NULL,
+        repeat_interval INTEGER NOT NULL,
+        start_date TEXT NOT NULL,
+        next_due_date TEXT NOT NULL,
+        end_date TEXT,
+        auto_add INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    ''');
   }
 
   Future<int> insertExpense(Expense expense) async {
     final db = await database;
     final data = expense.toMap()..remove('id');
     final id = await db.insert(tableExpenses, data);
-    debugPrint('[DB] insertExpense id=$id amount=${expense.amount}');
+    debugPrint('[DB] insertExpense id=$id title=${expense.title}');
     return id;
   }
 
@@ -87,4 +196,90 @@ class DatabaseHelper {
     debugPrint('[DB] updateExpense id=${expense.id} updated=$updated');
     return updated;
   }
+
+  Future<int> insertRecurringExpense(RecurringExpense recurring) async {
+    final db = await database;
+    final data = recurring.toDbMap();
+    logRecurringInsert(recurring);
+
+    final columns =
+        await db.rawQuery('PRAGMA table_info($tableRecurringExpenses)');
+    final columnNames =
+        columns.map((row) => row['name'] as String).toSet();
+    if (columnNames.contains('interval') && !data.containsKey('interval')) {
+      data['interval'] = recurring.interval;
+    }
+
+    final id = await db.insert(tableRecurringExpenses, data);
+    debugPrint('[DB] insertRecurringExpense id=$id saved=$data');
+    return id;
+  }
+
+  Future<List<RecurringExpense>> getRecurringExpenses() async {
+    final db = await database;
+    final rows = await db.query(
+      tableRecurringExpenses,
+      orderBy: 'next_due_date ASC',
+    );
+    debugPrint('[DB] Fetched recurring count: ${rows.length}');
+
+    final list = <RecurringExpense>[];
+    for (final row in rows) {
+      try {
+        list.add(RecurringExpense.fromMap(row));
+      } catch (error, stackTrace) {
+        debugPrint('[DB] Failed to map recurring row=$row error=$error');
+        debugPrint('$stackTrace');
+      }
+    }
+    return list;
+  }
+
+  Future<List<RecurringExpense>> getUpcomingPayments({int daysAhead = 7}) async {
+    final now = DateTime.now();
+    final today = dateOnly(now);
+    final futureDate = today.add(Duration(days: daysAhead));
+    final todayIso = toIsoDateString(today);
+    final futureIso = toIsoDateString(futureDate);
+    final db = await database;
+
+    final rows = await db.query(
+      tableRecurringExpenses,
+      where:
+          'next_due_date IS NOT NULL AND next_due_date != ? AND '
+          'date(next_due_date) >= date(?) AND date(next_due_date) <= date(?)',
+      whereArgs: <String>['', todayIso, futureIso],
+      orderBy: 'next_due_date ASC',
+    );
+
+    debugPrint(
+      '[DB] getUpcomingPayments today=$todayIso future=$futureIso raw=${rows.length}',
+    );
+
+    final list = <RecurringExpense>[];
+    for (final row in rows) {
+      try {
+        list.add(RecurringExpense.fromMap(row));
+      } catch (error, stackTrace) {
+        debugPrint('[DB] skip invalid upcoming row=$row error=$error');
+        debugPrint('$stackTrace');
+      }
+    }
+    return list;
+  }
+
+  Future<int> updateNextDueDate(int id, DateTime nextDueDate) async {
+    final db = await database;
+    final value = formatDbDate(nextDueDate);
+    final updated = await db.update(
+      tableRecurringExpenses,
+      <String, Object?>{'next_due_date': value},
+      where: 'id = ?',
+      whereArgs: <Object>[id],
+    );
+    debugPrint('[DB] updateNextDueDate id=$id next=$value updated=$updated');
+    return updated;
+  }
+
+  Future<void> logDebugDashboard() => logRecurringDebugDashboard(this);
 }
