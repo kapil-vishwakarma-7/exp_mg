@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../models/expense.dart';
+import '../../providers/expense_provider.dart';
+import '../../services/analytics_service.dart';
+import '../utils/expense_ui_helpers.dart';
 import '../widgets/analytics_category_tile.dart';
 import '../widgets/analytics_pie_chart.dart';
 
@@ -11,57 +16,70 @@ class AnalyticsScreen extends StatefulWidget {
 }
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
-  static const List<String> _months = <String>[
-    'September 2026',
-    'August 2026',
-    'July 2026',
-  ];
+  final AnalyticsService _analyticsService = AnalyticsService();
 
-  String _selectedMonth = _months.first;
+  DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  AnalyticsSnapshot? _cachedSnapshot;
+  int? _cacheKey;
 
-  final _categoryData = const <_CategoryData>[
-    _CategoryData(
-      name: 'Food',
-      amount: 18280,
-      progress: 0.40,
-      icon: Icons.restaurant_outlined,
-      color: Color(0xFF6E3EFF),
-    ),
-    _CategoryData(
-      name: 'Travel',
-      amount: 12400,
-      progress: 0.27,
-      icon: Icons.directions_car_outlined,
-      color: Color(0xFF00A6A6),
-    ),
-    _CategoryData(
-      name: 'Bills',
-      amount: 8900,
-      progress: 0.19,
-      icon: Icons.receipt_long_outlined,
-      color: Color(0xFFFF8A4C),
-    ),
-    _CategoryData(
-      name: 'Shopping',
-      amount: 6120,
-      progress: 0.14,
-      icon: Icons.shopping_bag_outlined,
-      color: Color(0xFFEC4899),
-    ),
+  static const List<Color> _chartColors = <Color>[
+    Color(0xFF6E3EFF),
+    Color(0xFF00A6A6),
+    Color(0xFFFF8A4C),
+    Color(0xFFEC4899),
+    Color(0xFF3B82F6),
+    Color(0xFF10B981),
   ];
 
   @override
-  Widget build(BuildContext context) {
-    final pieData = _categoryData
-        .map(
-          (item) => PieSliceData(
-            value: item.amount.toDouble(),
-            color: item.color,
-            label: item.name,
-          ),
-        )
-        .toList();
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ExpenseProvider>().fetchExpenses();
+    });
+  }
 
+  AnalyticsSnapshot _snapshotFor(List<Expense> expenses) {
+    final cacheKey = Object.hash(
+      _selectedMonth.year,
+      _selectedMonth.month,
+      expenses.length,
+      expenses.fold<double>(0, (sum, expense) => sum + expense.amount),
+    );
+
+    if (_cachedSnapshot != null && _cacheKey == cacheKey) {
+      return _cachedSnapshot!;
+    }
+
+    _cacheKey = cacheKey;
+    _cachedSnapshot = AnalyticsSnapshot.compute(
+      expenses,
+      _selectedMonth,
+      _analyticsService,
+    );
+    return _cachedSnapshot!;
+  }
+
+  List<DateTime> _monthOptions(List<Expense> expenses) {
+    final keys = <String, DateTime>{};
+    final now = DateTime.now();
+    keys['${now.year}-${now.month}'] = DateTime(now.year, now.month);
+
+    for (final expense in expenses) {
+      final month = DateTime(expense.date.year, expense.date.month);
+      keys['${month.year}-${month.month}'] = month;
+    }
+
+    final months = keys.values.toList()
+      ..sort((a, b) {
+        if (a.year != b.year) return b.year.compareTo(a.year);
+        return b.month.compareTo(a.month);
+      });
+    return months;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
       appBar: AppBar(
@@ -69,149 +87,280 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         elevation: 0,
         title: const Text('Analytics'),
         actions: <Widget>[
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _selectedMonth,
-                icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                style: const TextStyle(
-                  color: Color(0xFF111827),
-                  fontWeight: FontWeight.w600,
-                ),
-                items: _months
-                    .map(
-                      (month) => DropdownMenuItem<String>(
-                        value: month,
-                        child: Text(month),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) {
-                  if (value == null) return;
+          Consumer<ExpenseProvider>(
+            builder: (context, provider, child) {
+              final months = _monthOptions(provider.expenses);
+              if (months.isEmpty) {
+                return const SizedBox.shrink();
+              }
+
+              final selectedExists = months.any(
+                (month) =>
+                    month.year == _selectedMonth.year &&
+                    month.month == _selectedMonth.month,
+              );
+              final dropdownValue =
+                  selectedExists ? _selectedMonth : months.first;
+
+              if (!selectedExists) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
                   setState(() {
-                    _selectedMonth = value;
+                    _selectedMonth = dropdownValue;
+                    _cachedSnapshot = null;
                   });
-                },
-              ),
-            ),
+                });
+              }
+
+              return Container(
+                margin: const EdgeInsets.only(right: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<DateTime>(
+                    value: dropdownValue,
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                    style: const TextStyle(
+                      color: Color(0xFF111827),
+                      fontWeight: FontWeight.w600,
+                    ),
+                    items: months
+                        .map(
+                          (month) => DropdownMenuItem<DateTime>(
+                            value: month,
+                            child: Text(
+                              _analyticsService.formatMonthLabel(month),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        _selectedMonth = value;
+                        _cachedSnapshot = null;
+                      });
+                    },
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: <Widget>[
-          _CardContainer(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const <Widget>[
-                Text(
-                  'Total Spending This Month',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF6B7280),
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '₹45,700',
-                  style: TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF111827),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          _CardContainer(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                const Text(
-                  'Category Distribution',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF111827),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Row(
+      body: Consumer<ExpenseProvider>(
+        builder: (context, provider, child) {
+          if (provider.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final snapshot = _snapshotFor(provider.expenses);
+
+          if (provider.expenses.isEmpty) {
+            return const _AnalyticsEmptyState();
+          }
+
+          if (snapshot.isEmpty) {
+            return _AnalyticsEmptyState(
+              message:
+                  'No expenses in ${_analyticsService.formatMonthLabel(snapshot.month)}.',
+            );
+          }
+
+          final breakdownEntries = snapshot.categoryBreakdown.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value));
+
+          final pieData = breakdownEntries.asMap().entries.map((entry) {
+            final index = entry.key;
+            final category = entry.value;
+            return PieSliceData(
+              value: category.value,
+              color: _chartColors[index % _chartColors.length],
+              label: category.key,
+            );
+          }).toList();
+
+          final topCategory = snapshot.topCategory;
+          final topCategoryAmount = topCategory == null
+              ? 0.0
+              : snapshot.categoryBreakdown[topCategory] ?? 0;
+          final topCategoryPercent = snapshot.monthlySpending <= 0
+              ? 0
+              : ((topCategoryAmount / snapshot.monthlySpending) * 100).round();
+
+          final highestDay = snapshot.highestSpendingDay;
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: <Widget>[
+              _CardContainer(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    AnalyticsPieChart(slices: pieData),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        children: _categoryData
-                            .map(
-                              (item) => Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: _LegendItem(
-                                  color: item.color,
-                                  label: item.name,
-                                ),
-                              ),
-                            )
-                            .toList(),
+                    Text(
+                      'Total Spending (${_analyticsService.formatMonthLabel(snapshot.month)})',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _analyticsService.formatCurrency(snapshot.monthlySpending),
+                      style: const TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
                       ),
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          _CardContainer(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const <Widget>[
-                Text(
-                  'Insights',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF111827),
-                  ),
+              ),
+              const SizedBox(height: 16),
+              _CardContainer(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const Text(
+                      'Category Distribution',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: <Widget>[
+                        AnalyticsPieChart(slices: pieData),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            children: breakdownEntries.asMap().entries.map(
+                              (entry) {
+                                final index = entry.key;
+                                final category = entry.value;
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: _LegendItem(
+                                    color:
+                                        _chartColors[index % _chartColors.length],
+                                    label: category.key,
+                                  ),
+                                );
+                              },
+                            ).toList(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                SizedBox(height: 12),
-                _InsightTile(text: 'You spent 40% on Food'),
-                SizedBox(height: 8),
-                _InsightTile(text: 'Highest spending day: Friday'),
-                SizedBox(height: 8),
-                _InsightTile(text: 'Spending is down 8% vs last month'),
-              ],
+              ),
+              const SizedBox(height: 16),
+              _CardContainer(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const Text(
+                      'Insights',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (topCategory != null)
+                      _InsightTile(
+                        text:
+                            'You spent $topCategoryPercent% on $topCategory',
+                      ),
+                    if (topCategory != null) const SizedBox(height: 8),
+                    if (highestDay != null)
+                      _InsightTile(
+                        text:
+                            'Highest spending day: ${_analyticsService.formatDayLabel(highestDay)}',
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Categories',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827),
+                ),
+              ),
+              const SizedBox(height: 10),
+              ...breakdownEntries.asMap().entries.map((entry) {
+                final index = entry.key;
+                final category = entry.value;
+                final progress = snapshot.monthlySpending <= 0
+                    ? 0.0
+                    : category.value / snapshot.monthlySpending;
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: AnalyticsCategoryTile(
+                    icon: categoryIcon(category.key),
+                    title: category.key,
+                    amount: _analyticsService.formatCurrency(category.value),
+                    progress: progress,
+                    color: _chartColors[index % _chartColors.length],
+                  ),
+                );
+              }),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AnalyticsEmptyState extends StatelessWidget {
+  const _AnalyticsEmptyState({
+    this.message = 'Add expenses to see spending insights.',
+  });
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              Icons.bar_chart_outlined,
+              size: 56,
+              color: Colors.grey.shade400,
             ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Categories',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF111827),
-            ),
-          ),
-          const SizedBox(height: 10),
-          ..._categoryData.map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: AnalyticsCategoryTile(
-                icon: item.icon,
-                title: item.name,
-                amount: '₹${item.amount}',
-                progress: item.progress,
-                color: item.color,
+            const SizedBox(height: 12),
+            const Text(
+              'No analytics yet',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF111827),
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 6),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFF6B7280)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -313,20 +462,4 @@ class _InsightTile extends StatelessWidget {
       ),
     );
   }
-}
-
-class _CategoryData {
-  const _CategoryData({
-    required this.name,
-    required this.amount,
-    required this.progress,
-    required this.icon,
-    required this.color,
-  });
-
-  final String name;
-  final int amount;
-  final double progress;
-  final IconData icon;
-  final Color color;
 }

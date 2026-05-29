@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/expense_provider.dart';
+import '../utils/expense_ui_helpers.dart';
 import 'add_expense_screen.dart';
 import 'analytics_screen.dart';
 import 'profile_screen.dart';
@@ -8,19 +11,30 @@ import '../widgets/balance_card.dart';
 import '../widgets/payment_card.dart';
 import '../widgets/transaction_tile.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    Future<void> openAddExpense() async {
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const AddExpenseScreen(),
-        ),
-      );
-    }
+  State<HomeScreen> createState() => _HomeScreenState();
+}
 
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ExpenseProvider>().fetchExpenses();
+    });
+  }
+
+  Future<void> _openAddExpense() async {
+    await AddExpenseScreen.show(context);
+    if (!mounted) return;
+    await context.read<ExpenseProvider>().fetchExpenses();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
       body: SafeArea(
@@ -62,74 +76,68 @@ class HomeScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 20),
-            BalanceCard(
-              title: 'Current Balance',
-              amount: '₹45,700',
-              onAddTap: openAddExpense,
-            ),
-            const SizedBox(height: 24),
-            const _SectionHeader(
-              title: 'Upcoming Payments',
-              actionText: 'See all',
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              height: 210,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: const <Widget>[
-                  PaymentCard(
-                    appName: 'Adobe Premium',
-                    pricePerMonth: '₹2,499',
-                    daysLeft: '2 days left',
-                    isHighlighted: true,
-                    icon: Icons.change_history_rounded,
-                  ),
-                  SizedBox(width: 12),
-                  PaymentCard(
-                    appName: 'Apple Premium',
-                    pricePerMonth: '₹249',
-                    daysLeft: '2 days left',
-                    icon: Icons.apple_rounded,
-                  ),
-                  SizedBox(width: 12),
-                  PaymentCard(
-                    appName: 'Spotify',
-                    pricePerMonth: '₹119',
-                    daysLeft: '5 days left',
-                    icon: Icons.music_note_rounded,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            const _SectionHeader(
-              title: 'Recent Transactions',
-              actionText: 'See all',
-            ),
-            const SizedBox(height: 14),
-            const TransactionTile(
-              title: 'Apple Inc.',
-              dateTimeText: '21 Sep, 03:02 PM',
-              amount: '-₹230.50',
-              isExpense: true,
-              icon: Icons.apple_rounded,
-            ),
-            const SizedBox(height: 10),
-            const TransactionTile(
-              title: 'Adobe',
-              dateTimeText: '21 Sep, 03:22 PM',
-              amount: '-₹130.50',
-              isExpense: true,
-              icon: Icons.change_history_rounded,
-            ),
-            const SizedBox(height: 10),
-            const TransactionTile(
-              title: 'Amazon',
-              dateTimeText: '21 Sep, 02:02 PM',
-              amount: '-₹20.50',
-              isExpense: true,
-              icon: Icons.shopping_bag_outlined,
+            Consumer<ExpenseProvider>(
+              builder: (context, provider, child) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    BalanceCard(
+                      title: 'Total Spent',
+                      amount: formatExpenseAmount(provider.totalAmount),
+                      onAddTap: _openAddExpense,
+                    ),
+                    const SizedBox(height: 24),
+                    const _SectionHeader(
+                      title: 'Upcoming Payments',
+                      actionText: 'See all',
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      height: 210,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: const <Widget>[
+                          PaymentCard(
+                            appName: 'Adobe Premium',
+                            pricePerMonth: '₹2,499',
+                            daysLeft: '2 days left',
+                            isHighlighted: true,
+                            icon: Icons.change_history_rounded,
+                          ),
+                          SizedBox(width: 12),
+                          PaymentCard(
+                            appName: 'Apple Premium',
+                            pricePerMonth: '₹249',
+                            daysLeft: '2 days left',
+                            icon: Icons.apple_rounded,
+                          ),
+                          SizedBox(width: 12),
+                          PaymentCard(
+                            appName: 'Spotify',
+                            pricePerMonth: '₹119',
+                            daysLeft: '5 days left',
+                            icon: Icons.music_note_rounded,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _SectionHeader(
+                      title: 'Recent Transactions',
+                      actionText: 'See all',
+                      onActionTap: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const TransactionsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    _ExpenseListSection(provider: provider),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 88),
           ],
@@ -148,7 +156,7 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
         child: FloatingActionButton(
-          onPressed: openAddExpense,
+          onPressed: _openAddExpense,
           backgroundColor: const Color(0xFF6E3EFF),
           shape: const CircleBorder(),
           child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white),
@@ -204,6 +212,43 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
+class _ExpenseListSection extends StatelessWidget {
+  const _ExpenseListSection({required this.provider});
+
+  final ExpenseProvider provider;
+
+  @override
+  Widget build(BuildContext context) {
+    if (provider.isLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (provider.expenses.isEmpty) {
+      return const _RecentEmptyState();
+    }
+
+    return Column(
+      children: provider.expenses
+          .map(
+            (expense) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: TransactionTile(
+                title: expenseDisplayTitle(expense),
+                dateTimeText: formatExpenseDateTime(expense.date),
+                amount: '-${formatExpenseAmount(expense.amount)}',
+                isExpense: true,
+                icon: categoryIcon(expense.category),
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
 class _RoundIconButton extends StatelessWidget {
   const _RoundIconButton({
     required this.icon,
@@ -250,11 +295,63 @@ class _RoundIconButton extends StatelessWidget {
   }
 }
 
+class _RecentEmptyState extends StatelessWidget {
+  const _RecentEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: <Widget>[
+          Icon(
+            Icons.receipt_long_outlined,
+            size: 48,
+            color: Colors.grey.shade400,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'No expenses yet',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF111827),
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Tap + to add your first expense.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Color(0xFF6B7280)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, required this.actionText});
+  const _SectionHeader({
+    required this.title,
+    required this.actionText,
+    this.onActionTap,
+  });
 
   final String title;
   final String actionText;
+  final VoidCallback? onActionTap;
 
   @override
   Widget build(BuildContext context) {
@@ -270,7 +367,7 @@ class _SectionHeader extends StatelessWidget {
         ),
         const Spacer(),
         TextButton(
-          onPressed: () {},
+          onPressed: onActionTap,
           style: TextButton.styleFrom(
             visualDensity: VisualDensity.compact,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,

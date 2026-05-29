@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../domain/models/expense.dart';
+import '../../models/expense.dart';
 
 class ExpenseCard extends StatelessWidget {
   const ExpenseCard({super.key, required this.expense});

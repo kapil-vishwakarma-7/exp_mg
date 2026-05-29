@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../models/expense.dart';
+import '../../providers/expense_provider.dart';
+import '../utils/expense_ui_helpers.dart';
 import '../widgets/transaction_tile.dart';
 
 class TransactionsScreen extends StatefulWidget {
@@ -13,56 +17,13 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedFilter = 'All';
 
-  final List<_TransactionItem> _items = const <_TransactionItem>[
-    _TransactionItem(
-      name: 'Zomato',
-      dateTimeText: 'Today, 1:20 PM',
-      amount: '-₹420.00',
-      isExpense: true,
-      group: 'Today',
-      icon: Icons.restaurant_outlined,
-    ),
-    _TransactionItem(
-      name: 'Salary',
-      dateTimeText: 'Today, 9:05 AM',
-      amount: '+₹35,000.00',
-      isExpense: false,
-      group: 'Today',
-      icon: Icons.account_balance_outlined,
-    ),
-    _TransactionItem(
-      name: 'Uber',
-      dateTimeText: 'Yesterday, 8:12 PM',
-      amount: '-₹230.00',
-      isExpense: true,
-      group: 'Yesterday',
-      icon: Icons.local_taxi_outlined,
-    ),
-    _TransactionItem(
-      name: 'Amazon Refund',
-      dateTimeText: 'Yesterday, 11:34 AM',
-      amount: '+₹899.00',
-      isExpense: false,
-      group: 'Yesterday',
-      icon: Icons.inventory_2_outlined,
-    ),
-    _TransactionItem(
-      name: 'Electricity Bill',
-      dateTimeText: '20 Sep, 6:01 PM',
-      amount: '-₹1,750.00',
-      isExpense: true,
-      group: 'Older',
-      icon: Icons.bolt_outlined,
-    ),
-    _TransactionItem(
-      name: 'Groceries',
-      dateTimeText: '19 Sep, 7:45 PM',
-      amount: '-₹1,290.00',
-      isExpense: true,
-      group: 'Older',
-      icon: Icons.shopping_bag_outlined,
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ExpenseProvider>().fetchExpenses();
+    });
+  }
 
   @override
   void dispose() {
@@ -72,12 +33,6 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final visibleItems = _filteredItems();
-    final grouped = <String, List<_TransactionItem>>{};
-    for (final item in visibleItems) {
-      grouped.putIfAbsent(item.group, () => <_TransactionItem>[]).add(item);
-    }
-
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
       appBar: AppBar(
@@ -91,58 +46,75 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         ],
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: <Widget>[
-            _SearchBar(
-              controller: _searchController,
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 14),
-            Row(
+        child: Consumer<ExpenseProvider>(
+          builder: (context, provider, child) {
+            final visibleItems = _filteredItems(provider.expenses);
+            final grouped = <String, List<Expense>>{};
+            for (final item in visibleItems) {
+              grouped
+                  .putIfAbsent(dateGroupLabel(item.date), () => <Expense>[])
+                  .add(item);
+            }
+
+            return ListView(
+              padding: const EdgeInsets.all(16),
               children: <Widget>[
-                _FilterChip(
-                  label: 'All',
-                  selected: _selectedFilter == 'All',
-                  onTap: () => _updateFilter('All'),
+                _SearchBar(
+                  controller: _searchController,
+                  onChanged: (_) => setState(() {}),
                 ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'Income',
-                  selected: _selectedFilter == 'Income',
-                  onTap: () => _updateFilter('Income'),
+                const SizedBox(height: 14),
+                Row(
+                  children: <Widget>[
+                    _FilterChip(
+                      label: 'All',
+                      selected: _selectedFilter == 'All',
+                      onTap: () => _updateFilter('All'),
+                    ),
+                    const SizedBox(width: 8),
+                    _FilterChip(
+                      label: 'Income',
+                      selected: _selectedFilter == 'Income',
+                      onTap: () => _updateFilter('Income'),
+                    ),
+                    const SizedBox(width: 8),
+                    _FilterChip(
+                      label: 'Expense',
+                      selected: _selectedFilter == 'Expense',
+                      onTap: () => _updateFilter('Expense'),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'Expense',
-                  selected: _selectedFilter == 'Expense',
-                  onTap: () => _updateFilter('Expense'),
-                ),
+                const SizedBox(height: 16),
+                if (provider.isLoading)
+                  const Center(child: CircularProgressIndicator())
+                else if (visibleItems.isEmpty)
+                  const _EmptyState()
+                else ...<Widget>[
+                  ..._buildGroup(grouped, 'Today'),
+                  ..._buildGroup(grouped, 'Yesterday'),
+                  ..._buildGroup(grouped, 'Older'),
+                ],
+                const SizedBox(height: 12),
               ],
-            ),
-            const SizedBox(height: 16),
-            if (visibleItems.isEmpty)
-              const _EmptyState()
-            else ...<Widget>[
-              ..._buildGroup(grouped, 'Today'),
-              ..._buildGroup(grouped, 'Yesterday'),
-              ..._buildGroup(grouped, 'Older'),
-            ],
-            const SizedBox(height: 12),
-          ],
+            );
+          },
         ),
       ),
     );
   }
 
-  List<_TransactionItem> _filteredItems() {
+  List<Expense> _filteredItems(List<Expense> expenses) {
     final query = _searchController.text.trim().toLowerCase();
 
-    return _items.where((item) {
-      final matchesQuery = query.isEmpty || item.name.toLowerCase().contains(query);
+    return expenses.where((expense) {
+      final title = expenseDisplayTitle(expense).toLowerCase();
+      final category = expense.category.toLowerCase();
+      final matchesQuery =
+          query.isEmpty || title.contains(query) || category.contains(query);
       final matchesFilter = switch (_selectedFilter) {
-        'Income' => !item.isExpense,
-        'Expense' => item.isExpense,
+        'Income' => false,
+        'Expense' => true,
         _ => true,
       };
       return matchesQuery && matchesFilter;
@@ -150,7 +122,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   }
 
   List<Widget> _buildGroup(
-    Map<String, List<_TransactionItem>> grouped,
+    Map<String, List<Expense>> grouped,
     String title,
   ) {
     final sectionItems = grouped[title];
@@ -169,14 +141,14 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         ),
       ),
       ...sectionItems.map(
-        (item) => Padding(
+        (expense) => Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: TransactionTile(
-            title: item.name,
-            dateTimeText: item.dateTimeText,
-            amount: item.amount,
-            isExpense: item.isExpense,
-            icon: item.icon,
+            title: expenseDisplayTitle(expense),
+            dateTimeText: formatExpenseDateTime(expense.date),
+            amount: '-${formatExpenseAmount(expense.amount)}',
+            isExpense: true,
+            icon: categoryIcon(expense.category),
           ),
         ),
       ),
@@ -288,22 +260,4 @@ class _EmptyState extends StatelessWidget {
       ),
     );
   }
-}
-
-class _TransactionItem {
-  const _TransactionItem({
-    required this.name,
-    required this.dateTimeText,
-    required this.amount,
-    required this.isExpense,
-    required this.group,
-    required this.icon,
-  });
-
-  final String name;
-  final String dateTimeText;
-  final String amount;
-  final bool isExpense;
-  final String group;
-  final IconData icon;
 }
