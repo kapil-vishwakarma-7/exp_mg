@@ -7,6 +7,10 @@ class Expense {
     required this.date,
     this.note = '',
     DateTime? createdAt,
+    this.transactionType,
+    this.merchant,
+    this.rawSms,
+    this.smsHash,
   }) : createdAt = createdAt ?? date;
 
   final int? id;
@@ -16,6 +20,13 @@ class Expense {
   final DateTime date;
   final String note;
   final DateTime createdAt;
+  final String? transactionType;
+  final String? merchant;
+  final String? rawSms;
+  final String? smsHash;
+
+  bool get isDebit => transactionType == null || transactionType == 'debit';
+  bool get isCredit => transactionType == 'credit';
 
   Expense copyWith({
     int? id,
@@ -25,6 +36,10 @@ class Expense {
     DateTime? date,
     String? note,
     DateTime? createdAt,
+    String? transactionType,
+    String? merchant,
+    String? rawSms,
+    String? smsHash,
   }) {
     return Expense(
       id: id ?? this.id,
@@ -34,6 +49,10 @@ class Expense {
       date: date ?? this.date,
       note: note ?? this.note,
       createdAt: createdAt ?? this.createdAt,
+      transactionType: transactionType ?? this.transactionType,
+      merchant: merchant ?? this.merchant,
+      rawSms: rawSms ?? this.rawSms,
+      smsHash: smsHash ?? this.smsHash,
     );
   }
 
@@ -46,6 +65,10 @@ class Expense {
       'date': date.toIso8601String(),
       'note': note,
       'created_at': createdAt.toIso8601String(),
+      'transaction_type': transactionType,
+      'merchant': merchant,
+      'raw_sms': rawSms,
+      'sms_hash': smsHash,
     };
   }
 
@@ -53,7 +76,7 @@ class Expense {
     final date = DateTime.parse(map['date'] as String);
     return Expense(
       id: map['id'] as int?,
-      title: (map['title'] as String?) ?? (map['note'] as String? ?? ''),
+      title: (map['title'] as String?) ?? (map['merchant'] as String? ?? ''),
       amount: (map['amount'] as num).toDouble(),
       category: map['category'] as String,
       date: date,
@@ -61,6 +84,10 @@ class Expense {
       createdAt: map['created_at'] != null
           ? DateTime.parse(map['created_at'] as String)
           : date,
+      transactionType: map['transaction_type'] as String?,
+      merchant: map['merchant'] as String?,
+      rawSms: map['raw_sms'] as String?,
+      smsHash: map['sms_hash'] as String?,
     );
   }
 }

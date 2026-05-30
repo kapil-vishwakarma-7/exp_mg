@@ -4,6 +4,8 @@ import 'package:sqflite/sqflite.dart';
 
 import '../models/expense.dart';
 import '../models/recurring_expense.dart';
+import '../../sms/models/parsed_transaction.dart';
+import '../../sms/utils/sms_expense_mapper.dart';
 import '../services/recurring_debug.dart';
 import '../utils/recurring_date_utils.dart';
 
@@ -13,7 +15,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const String _databaseName = 'expenses.db';
-  static const int _databaseVersion = 4;
+  static const int _databaseVersion = 5;
   static const String tableExpenses = 'expenses';
   static const String tableRecurringExpenses = 'recurring_expenses';
 
@@ -72,6 +74,36 @@ class DatabaseHelper {
     if (oldVersion < 4) {
       await _normalizeRecurringExpensesTable(db);
     }
+
+    if (oldVersion < 5) {
+      await _migrateExpensesSmsColumns(db);
+    }
+  }
+
+  Future<void> _migrateExpensesSmsColumns(Database db) async {
+    final columns = await db.rawQuery('PRAGMA table_info($tableExpenses)');
+    final names = columns.map((row) => row['name'] as String).toSet();
+
+    if (!names.contains('transaction_type')) {
+      await db.execute(
+        'ALTER TABLE $tableExpenses ADD COLUMN transaction_type TEXT',
+      );
+    }
+    if (!names.contains('merchant')) {
+      await db.execute('ALTER TABLE $tableExpenses ADD COLUMN merchant TEXT');
+    }
+    if (!names.contains('raw_sms')) {
+      await db.execute('ALTER TABLE $tableExpenses ADD COLUMN raw_sms TEXT');
+    }
+    if (!names.contains('sms_hash')) {
+      await db.execute('ALTER TABLE $tableExpenses ADD COLUMN sms_hash TEXT');
+    }
+
+    await db.execute('''
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_expenses_sms_hash
+      ON $tableExpenses(sms_hash)
+      WHERE sms_hash IS NOT NULL
+    ''');
   }
 
   /// Ensures [repeat_interval] exists and removes legacy [interval] column.
@@ -130,8 +162,17 @@ class DatabaseHelper {
         category TEXT NOT NULL,
         date TEXT NOT NULL,
         note TEXT NOT NULL,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        transaction_type TEXT,
+        merchant TEXT,
+        raw_sms TEXT,
+        sms_hash TEXT
       )
+    ''');
+    await db.execute('''
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_expenses_sms_hash
+      ON $tableExpenses(sms_hash)
+      WHERE sms_hash IS NOT NULL
     ''');
   }
 
@@ -159,6 +200,41 @@ class DatabaseHelper {
     final id = await db.insert(tableExpenses, data);
     debugPrint('[DB] insertExpense id=$id title=${expense.title}');
     return id;
+  }
+
+  Future<bool> smsHashExists(String hash) async {
+    if (hash.isEmpty) return false;
+    final db = await database;
+    final rows = await db.query(
+      tableExpenses,
+      columns: <String>['id'],
+      where: 'sms_hash = ?',
+      whereArgs: <Object>[hash],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
+  }
+
+  Future<int> insertParsedTransaction(ParsedTransaction transaction) async {
+    final expense = parsedTransactionToExpense(transaction);
+    final db = await database;
+    final data = expense.toMap()..remove('id');
+
+    try {
+      debugPrint('[DB] insertParsedTransaction start ${transaction.merchant}');
+      final id = await db.insert(tableExpenses, data);
+      debugPrint(
+        '[DB] insertParsedTransaction success id=$id ${transaction.merchant}',
+      );
+      return id;
+    } on DatabaseException catch (error) {
+      if (error.isUniqueConstraintError()) {
+        debugPrint('[DB] insertParsedTransaction duplicate hash');
+        return 0;
+      }
+      debugPrint('[DB] insertParsedTransaction error: $error');
+      rethrow;
+    }
   }
 
   Future<List<Expense>> getAllExpenses() async {

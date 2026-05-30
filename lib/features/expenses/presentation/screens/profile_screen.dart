@@ -1,4 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../../sms/models/parsed_transaction.dart';
+import '../../../sms/models/sms_message.dart';
+import '../../../sms/providers/sms_tracking_provider.dart';
+import '../../providers/expense_provider.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -48,6 +54,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
               icon: Icons.link_rounded,
               title: 'Connect Notion',
               onTap: () {},
+            ),
+            const SizedBox(height: 10),
+            Consumer<SmsTrackingProvider>(
+              builder: (context, sms, _) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    _SettingsToggleItem(
+                      icon: Icons.sms_outlined,
+                      title: 'Enable SMS Tracking',
+                      subtitle: sms.isSupported
+                          ? (sms.statusMessage ?? 'Android only')
+                          : 'Available on Android only',
+                      value: sms.isEnabled,
+                      onChanged: sms.isSupported
+                          ? (value) async {
+                              await sms.setEnabled(value);
+                              if (!context.mounted) return;
+                              if (value) {
+                                await context
+                                    .read<ExpenseProvider>()
+                                    .fetchExpenses();
+                              }
+                            }
+                          : null,
+                    ),
+                    if (sms.recentParsed.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 8),
+                      _SmsParsedPreview(transactions: sms.recentParsed),
+                    ],
+                    if (sms.isEnabled) ...<Widget>[
+                      const SizedBox(height: 8),
+                      _SmsDebugPanel(
+                        inboxCount: sms.inboxCount,
+                        lastSms: sms.lastReceivedSms,
+                        lastFailure: sms.lastFailureReason,
+                        lastParsed: sms.recentParsed.isNotEmpty
+                            ? sms.recentParsed.first
+                            : null,
+                      ),
+                    ],
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 10),
             _SettingsToggleItem(
@@ -200,39 +250,173 @@ class _SettingsToggleItem extends StatelessWidget {
     required this.title,
     required this.value,
     required this.onChanged,
+    this.subtitle,
   });
 
   final IconData icon;
   final String title;
+  final String? subtitle;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        child: Row(
+          children: <Widget>[
+            Icon(icon, color: const Color(0xFF374151)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  if (subtitle != null) ...<Widget>[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Switch(
+              value: value,
+              onChanged: onChanged,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SmsDebugPanel extends StatelessWidget {
+  const _SmsDebugPanel({
+    required this.inboxCount,
+    this.lastSms,
+    this.lastFailure,
+    this.lastParsed,
+  });
+
+  final int inboxCount;
+  final SmsMessage? lastSms;
+  final String? lastFailure;
+  final ParsedTransaction? lastParsed;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(icon, color: const Color(0xFF374151)),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              'Dark Mode',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF111827),
-              ),
+          const Text(
+            'SMS Debug',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF374151),
             ),
           ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
+          const SizedBox(height: 6),
+          Text('Inbox scanned: $inboxCount', style: _debugStyle),
+          if (lastSms != null) ...<Widget>[
+            const SizedBox(height: 4),
+            Text('Last SMS from: ${lastSms!.sender}', style: _debugStyle),
+            Text(
+              lastSms!.body,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: _debugStyle,
+            ),
+          ],
+          if (lastParsed != null) ...<Widget>[
+            const SizedBox(height: 4),
+            Text(
+              'Last parsed: ₹${lastParsed!.amount} ${lastParsed!.type} '
+              '• ${lastParsed!.merchant}',
+              style: _debugStyle.copyWith(color: const Color(0xFF059669)),
+            ),
+          ],
+          if (lastFailure != null) ...<Widget>[
+            const SizedBox(height: 4),
+            Text(
+              'Last failure: $lastFailure',
+              style: _debugStyle.copyWith(color: const Color(0xFFDC2626)),
+            ),
+          ],
+          const SizedBox(height: 4),
+          Text(
+            'Keep app in foreground for adb emu sms send',
+            style: _debugStyle.copyWith(
+              fontSize: 11,
+              color: const Color(0xFF9CA3AF),
+            ),
           ),
+        ],
+      ),
+    );
+  }
+
+  static const TextStyle _debugStyle = TextStyle(
+    fontSize: 12,
+    color: Color(0xFF4B5563),
+  );
+}
+
+class _SmsParsedPreview extends StatelessWidget {
+  const _SmsParsedPreview({required this.transactions});
+
+  final List<ParsedTransaction> transactions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Text(
+            'Recent parsed SMS',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF374151),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...transactions.take(3).map((tx) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '₹${tx.amount} ${tx.type} • ${tx.merchant}',
+                style: const TextStyle(fontSize: 13),
+              ),
+            );
+          }),
         ],
       ),
     );

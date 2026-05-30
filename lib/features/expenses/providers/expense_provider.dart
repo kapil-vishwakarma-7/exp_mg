@@ -22,8 +22,9 @@ class ExpenseProvider extends ChangeNotifier {
       List<RecurringExpense>.unmodifiable(_upcomingPayments);
   bool get isLoading => _isLoading;
   int get refreshVersion => _refreshVersion;
-  double get totalAmount =>
-      _expenses.fold(0, (total, expense) => total + expense.amount);
+  double get totalAmount => _expenses
+      .where((expense) => expense.isDebit)
+      .fold(0, (total, expense) => total + expense.amount);
 
   Future<void> initialize() async {
     if (_initialized) return;
