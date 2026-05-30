@@ -15,7 +15,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const String _databaseName = 'expenses.db';
-  static const int _databaseVersion = 5;
+  static const int _databaseVersion = 6;
   static const String tableExpenses = 'expenses';
   static const String tableRecurringExpenses = 'recurring_expenses';
 
@@ -77,6 +77,26 @@ class DatabaseHelper {
 
     if (oldVersion < 5) {
       await _migrateExpensesSmsColumns(db);
+    }
+
+    if (oldVersion < 6) {
+      await _migrateExpensesTransactionTime(db);
+    }
+  }
+
+  Future<void> _migrateExpensesTransactionTime(Database db) async {
+    final columns = await db.rawQuery('PRAGMA table_info($tableExpenses)');
+    final names = columns.map((row) => row['name'] as String).toSet();
+
+    if (!names.contains('transaction_time')) {
+      await db.execute(
+        'ALTER TABLE $tableExpenses ADD COLUMN transaction_time TEXT',
+      );
+      await db.execute('''
+        UPDATE $tableExpenses
+        SET transaction_time = date
+        WHERE transaction_time IS NULL
+      ''');
     }
   }
 
@@ -166,7 +186,8 @@ class DatabaseHelper {
         transaction_type TEXT,
         merchant TEXT,
         raw_sms TEXT,
-        sms_hash TEXT
+        sms_hash TEXT,
+        transaction_time TEXT
       )
     ''');
     await db.execute('''
@@ -241,7 +262,7 @@ class DatabaseHelper {
     final db = await database;
     final rows = await db.query(
       tableExpenses,
-      orderBy: 'date DESC, id DESC',
+      orderBy: 'COALESCE(transaction_time, date) DESC, id DESC',
     );
     debugPrint('[DB] getAllExpenses count=${rows.length}');
     return rows.map(Expense.fromMap).toList();

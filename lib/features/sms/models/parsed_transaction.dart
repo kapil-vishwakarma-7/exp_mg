@@ -4,7 +4,7 @@ class ParsedTransaction {
     required this.type,
     required this.merchant,
     required this.category,
-    required this.date,
+    required this.transactionTime,
     required this.rawSms,
     this.account,
     this.balance,
@@ -14,19 +14,25 @@ class ParsedTransaction {
   final String type;
   final String merchant;
   final String category;
-  final DateTime date;
+  final DateTime transactionTime;
   final String rawSms;
   final String? account;
   final double? balance;
+
+  /// Alias for legacy code paths.
+  DateTime get date => transactionTime;
 
   bool get isDebit => type == 'debit';
   bool get isCredit => type == 'credit';
 
   String get dedupeKey {
-    final d = DateTime(date.year, date.month, date.day);
+    final t = transactionTime;
+    final bucket =
+        '${t.year}-${t.month}-${t.day}-${t.hour}-${t.minute}';
     final accountPart = account ?? '';
-    return '${amount.toStringAsFixed(2)}|${d.toIso8601String()}|'
-        '${merchant.toLowerCase().trim()}|$accountPart';
+    return '${amount.toStringAsFixed(2)}|$bucket|'
+        '${merchant.toLowerCase().trim()}|$accountPart|'
+        '${rawSms.hashCode}';
   }
 
   Map<String, Object?> toLogMap() => <String, Object?>{
@@ -36,7 +42,7 @@ class ParsedTransaction {
         'account': account,
         'balance': balance,
         'category': category,
-        'date': date.toIso8601String(),
+        'transactionTime': transactionTime.toIso8601String(),
       };
 
   @override
