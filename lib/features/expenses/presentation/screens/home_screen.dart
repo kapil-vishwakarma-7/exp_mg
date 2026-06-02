@@ -36,8 +36,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -51,19 +52,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       Consumer<UserProvider>(
                         builder: (context, userProvider, _) => Text(
                           'Hello, ${userProvider.name}!',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 30,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF121826),
+                            color: cs.onSurface,
                           ),
                         ),
                       ),
                       const SizedBox(height: 4),
-                      const Text(
+                      Text(
                         'Track your money, stay in control',
                         style: TextStyle(
                           fontSize: 14,
-                          color: Color(0xFF6B7280),
+                          color: cs.onSurface.withValues(alpha: 0.55),
                         ),
                       ),
                     ],
@@ -137,7 +138,6 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(),
         notchMargin: 8,
-        color: Colors.white,
         elevation: 2,
         child: SizedBox(
           height: 68,
@@ -234,18 +234,20 @@ class _RoundIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Stack(
       clipBehavior: Clip.none,
       children: <Widget>[
         Material(
-          color: Colors.white,
+          color: cs.surface,
           shape: const CircleBorder(),
           child: InkWell(
             onTap: onTap,
             customBorder: const CircleBorder(),
             child: Padding(
               padding: const EdgeInsets.all(12),
-              child: Icon(icon, color: const Color(0xFF111827), size: 24),
+              child: Icon(icon, color: cs.onSurface, size: 24),
             ),
           ),
         ),
@@ -272,11 +274,13 @@ class _RecentEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -291,22 +295,22 @@ class _RecentEmptyState extends StatelessWidget {
           Icon(
             Icons.receipt_long_outlined,
             size: 48,
-            color: Colors.grey.shade400,
+            color: cs.onSurface.withValues(alpha: 0.35),
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'No expenses yet',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF111827),
+              color: cs.onSurface,
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Tap + to add your first expense.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF6B7280)),
+            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55)),
           ),
         ],
       ),
@@ -327,14 +331,16 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Row(
       children: <Widget>[
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF121826),
+            color: cs.onSurface,
           ),
         ),
         const Spacer(),
@@ -346,10 +352,10 @@ class _SectionHeader extends StatelessWidget {
           ),
           child: Text(
             actionText,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF6B7280),
+              color: cs.onSurface.withValues(alpha: 0.55),
             ),
           ),
         ),
@@ -371,12 +377,14 @@ class _BottomNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return IconButton(
       onPressed: onTap ?? () {},
       icon: Icon(
         icon,
         size: 26,
-        color: selected ? const Color(0xFF6E3EFF) : const Color(0xFF7C8596),
+        color: selected ? cs.primary : cs.onSurface.withValues(alpha: 0.5),
       ),
     );
   }

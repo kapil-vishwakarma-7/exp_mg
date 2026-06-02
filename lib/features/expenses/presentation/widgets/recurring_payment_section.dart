@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../models/recurring_data.dart';
 import 'expense_date_picker.dart';
 
@@ -14,39 +15,38 @@ class RecurringPaymentSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Material(
-          color: Colors.white,
+          color: cs.surface,
           borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
             child: SwitchListTile(
               contentPadding: EdgeInsets.zero,
-            title: const Text(
-              'Recurring Payment',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF111827),
+              title: Text(
+                'Recurring Payment',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurface,
+                ),
               ),
-            ),
-            value: data.isRecurring,
-            activeThumbColor: Colors.white,
-            activeTrackColor: const Color(0xFF6E3EFF),
-            onChanged: (value) {
-              onChanged(data.copyWith(isRecurring: value));
-            },
+              value: data.isRecurring,
+              activeThumbColor: Colors.white,
+              activeTrackColor: const Color(0xFF6E3EFF),
+              onChanged: (value) {
+                onChanged(data.copyWith(isRecurring: value));
+              },
             ),
           ),
         ),
         AnimatedCrossFade(
           firstChild: const SizedBox.shrink(),
-          secondChild: _RecurringFields(
-            data: data,
-            onChanged: onChanged,
-          ),
+          secondChild: _RecurringFields(data: data, onChanged: onChanged),
           crossFadeState: data.isRecurring
               ? CrossFadeState.showSecond
               : CrossFadeState.showFirst,
@@ -59,26 +59,25 @@ class RecurringPaymentSection extends StatelessWidget {
 }
 
 class _RecurringFields extends StatelessWidget {
-  const _RecurringFields({
-    required this.data,
-    required this.onChanged,
-  });
+  const _RecurringFields({required this.data, required this.onChanged});
 
   final RecurringData data;
   final ValueChanged<RecurringData> onChanged;
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const Text(
+          Text(
             'This expense will repeat automatically',
             style: TextStyle(
               fontSize: 13,
-              color: Color(0xFF6B7280),
+              color: cs.onSurface.withValues(alpha: 0.6),
             ),
           ),
           const SizedBox(height: 12),
@@ -86,7 +85,8 @@ class _RecurringFields extends StatelessWidget {
             label: 'Frequency',
             child: DropdownButtonFormField<String>(
               initialValue: data.frequency,
-              decoration: _fieldDecoration(),
+              decoration: _fieldDecoration(cs),
+              dropdownColor: cs.surface,
               items: RecurringData.frequencies
                   .map(
                     (item) => DropdownMenuItem<String>(
@@ -96,9 +96,7 @@ class _RecurringFields extends StatelessWidget {
                   )
                   .toList(),
               onChanged: (value) {
-                if (value != null) {
-                  onChanged(data.copyWith(frequency: value));
-                }
+                if (value != null) onChanged(data.copyWith(frequency: value));
               },
             ),
           ),
@@ -108,7 +106,7 @@ class _RecurringFields extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: cs.surface,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Row(
@@ -125,18 +123,17 @@ class _RecurringFields extends StatelessWidget {
                     child: Text(
                       data.intervalLabel,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF111827),
+                        color: cs.onSurface,
                       ),
                     ),
                   ),
                   _StepperButton(
                     icon: Icons.add_rounded,
-                    onTap: () => onChanged(
-                      data.copyWith(interval: data.interval + 1),
-                    ),
+                    onTap: () =>
+                        onChanged(data.copyWith(interval: data.interval + 1)),
                   ),
                 ],
               ),
@@ -175,22 +172,22 @@ class _RecurringFields extends StatelessWidget {
                         vertical: 14,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: cs.surface,
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: <Widget>[
                           Icon(
                             Icons.event_outlined,
                             size: 18,
-                            color: Color(0xFF4B5563),
+                            color: cs.onSurface.withValues(alpha: 0.6),
                           ),
-                          SizedBox(width: 10),
+                          const SizedBox(width: 10),
                           Text(
                             'Not set (tap to add)',
                             style: TextStyle(
                               fontSize: 15,
-                              color: Color(0xFF6B7280),
+                              color: cs.onSurface.withValues(alpha: 0.6),
                             ),
                           ),
                         ],
@@ -223,24 +220,22 @@ class _RecurringFields extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Material(
-            color: Colors.white,
+            color: cs.surface,
             borderRadius: BorderRadius.circular(16),
             child: CheckboxListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 8),
               value: data.autoAdd,
               activeColor: const Color(0xFF6E3EFF),
-              title: const Text(
+              title: Text(
                 'Auto Add Expense',
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF111827),
+                  color: cs.onSurface,
                 ),
               ),
               onChanged: (value) {
-                if (value != null) {
-                  onChanged(data.copyWith(autoAdd: value));
-                }
+                if (value != null) onChanged(data.copyWith(autoAdd: value));
               },
             ),
           ),
@@ -263,10 +258,10 @@ class _RecurringFields extends StatelessWidget {
     if (picked != null) onPicked(picked);
   }
 
-  InputDecoration _fieldDecoration() {
+  InputDecoration _fieldDecoration(ColorScheme cs) {
     return InputDecoration(
       filled: true,
-      fillColor: Colors.white,
+      fillColor: cs.surface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
@@ -284,15 +279,17 @@ class _LabeledField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF6B7280),
+            color: cs.onSurface.withValues(alpha: 0.6),
           ),
         ),
         const SizedBox(height: 6),
@@ -310,8 +307,10 @@ class _StepperButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Material(
-      color: const Color(0xFFF3F4F6),
+      color: cs.surfaceContainerHighest,
       shape: const CircleBorder(),
       child: InkWell(
         onTap: onTap,
@@ -322,8 +321,8 @@ class _StepperButton extends StatelessWidget {
             icon,
             size: 20,
             color: onTap == null
-                ? const Color(0xFFD1D5DB)
-                : const Color(0xFF374151),
+                ? cs.onSurface.withValues(alpha: 0.3)
+                : cs.onSurface.withValues(alpha: 0.8),
           ),
         ),
       ),

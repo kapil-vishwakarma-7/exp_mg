@@ -12,24 +12,26 @@ class AddAmountInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return TextField(
       controller: controller,
       focusNode: focusNode,
       autofocus: true,
       textAlign: TextAlign.center,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 38,
         fontWeight: FontWeight.w700,
-        color: Color(0xFF111827),
+        color: cs.onSurface,
       ),
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         border: InputBorder.none,
         hintText: '₹0',
         hintStyle: TextStyle(
           fontSize: 38,
           fontWeight: FontWeight.w700,
-          color: Color(0xFFB8C0CF),
+          color: cs.onSurface.withValues(alpha: 0.3),
         ),
       ),
     );

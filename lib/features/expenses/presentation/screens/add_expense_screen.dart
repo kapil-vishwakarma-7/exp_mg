@@ -60,41 +60,27 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       firstDate: DateTime(2020),
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
-
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
-    }
+    if (picked != null) setState(() => _selectedDate = picked);
   }
 
   String? _validateInput() {
     final amountText = _amountController.text.trim();
-    if (amountText.isEmpty) {
-      return 'Enter amount';
-    }
-
+    if (amountText.isEmpty) return 'Enter amount';
     final amount = double.tryParse(amountText);
-    if (amount == null || amount <= 0) {
-      return 'Enter a valid amount';
-    }
-
-    if (_selectedCategory.isEmpty) {
-      return 'Select a category';
-    }
-
+    if (amount == null || amount <= 0) return 'Enter a valid amount';
+    if (_selectedCategory.isEmpty) return 'Select a category';
     if (_recurringData.isRecurring) {
       final recurringError = _recurringData.validate();
       if (recurringError != null) return recurringError;
     }
-
     return null;
   }
 
   Future<void> _save() async {
     final validationError = _validateInput();
     if (validationError != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(validationError)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(validationError)));
       return;
     }
 
@@ -133,6 +119,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Padding(
@@ -141,9 +128,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         constraints: BoxConstraints(
           maxHeight: MediaQuery.sizeOf(context).height * 0.92,
         ),
-        decoration: const BoxDecoration(
-          color: Color(0xFFF6F7FB),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -153,7 +140,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: const Color(0xFFD1D5DB),
+                color: cs.outlineVariant,
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
@@ -161,21 +148,21 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
               child: Row(
                 children: <Widget>[
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       'Add Expense',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF111827),
+                        color: cs.onSurface,
                       ),
                     ),
                   ),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.close_rounded),
-                    color: const Color(0xFF6B7280),
+                    color: cs.onSurface.withValues(alpha: 0.6),
                   ),
                 ],
               ),
@@ -193,23 +180,18 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   CategoryChipSelector(
                     categories: _categories,
                     selectedCategory: _selectedCategory,
-                    onSelected: (value) {
-                      setState(() => _selectedCategory = value);
-                    },
+                    onSelected: (value) =>
+                        setState(() => _selectedCategory = value),
                   ),
                   const SizedBox(height: 20),
                   ExpenseNoteInput(controller: _noteController),
                   const SizedBox(height: 14),
-                  ExpenseDatePicker(
-                    date: _selectedDate,
-                    onTap: _pickDate,
-                  ),
+                  ExpenseDatePicker(date: _selectedDate, onTap: _pickDate),
                   const SizedBox(height: 16),
                   RecurringPaymentSection(
                     data: _recurringData,
-                    onChanged: (value) {
-                      setState(() => _recurringData = value);
-                    },
+                    onChanged: (value) =>
+                        setState(() => _recurringData = value),
                   ),
                 ],
               ),

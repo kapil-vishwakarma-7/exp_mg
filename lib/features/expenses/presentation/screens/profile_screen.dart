@@ -5,19 +5,12 @@ import '../../../sms/models/parsed_transaction.dart';
 import '../../../sms/models/sms_message.dart';
 import '../../../sms/providers/sms_tracking_provider.dart';
 import '../../providers/expense_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../providers/user_provider.dart';
 
-class ProfileScreen extends StatefulWidget {
+class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
-  @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
-}
-
-class _ProfileScreenState extends State<ProfileScreen> {
-  bool _darkModeEnabled = false;
-
-  /// Opens an inline bottom sheet to edit the user's name.
   Future<void> _editName(BuildContext context) async {
     final userProvider = context.read<UserProvider>();
     final controller = TextEditingController(text: userProvider.name);
@@ -27,25 +20,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
+        final cs = Theme.of(sheetContext).colorScheme;
         final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
+
         return Padding(
           padding: EdgeInsets.only(bottom: bottomInset),
           child: Container(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-            decoration: const BoxDecoration(
-              color: Color(0xFFF6F7FB),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(24)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const Text(
+                Text(
                   'Edit Name',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF111827),
+                    color: cs.onSurface,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -56,7 +52,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   decoration: InputDecoration(
                     hintText: 'Enter your name',
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: cs.surfaceContainerHighest,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
                       borderSide: BorderSide.none,
@@ -82,8 +78,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onPressed: () async {
                         final newName = controller.text;
                         if (newName.trim().isEmpty) return;
-                        // Pop the sheet BEFORE notifying listeners so no
-                        // sheet widget is in the tree when Provider rebuilds.
                         Navigator.of(sheetContext).pop();
                         await userProvider.updateName(newName);
                       },
@@ -115,10 +109,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
-      appBar: AppBar(
-        title: const Text('Profile'),
-      ),
+      appBar: AppBar(title: const Text('Profile')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -199,15 +190,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             ),
             const SizedBox(height: 10),
-            _SettingsToggleItem(
-              icon: Icons.dark_mode_outlined,
-              title: 'Dark Mode',
-              value: _darkModeEnabled,
-              onChanged: (value) {
-                setState(() {
-                  _darkModeEnabled = value;
-                });
-              },
+            Consumer<ThemeProvider>(
+              builder: (context, themeProvider, _) => _SettingsToggleItem(
+                icon: Icons.dark_mode_outlined,
+                title: 'Dark Mode',
+                value: themeProvider.isDark,
+                onChanged: (value) => themeProvider.toggleTheme(value),
+              ),
             ),
             const SizedBox(height: 26),
             _LogoutButton(onTap: () {}),
@@ -218,7 +207,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-// ─── Profile header card ─────────────────────────────────────────────────────
+// ─── Profile header card ──────────────────────────────────────────────────────
 
 class _ProfileHeaderCard extends StatelessWidget {
   const _ProfileHeaderCard({
@@ -231,16 +220,16 @@ class _ProfileHeaderCard extends StatelessWidget {
   final String subtitle;
   final VoidCallback onEditTap;
 
-  /// First letter of the name for the avatar, uppercased.
-  String get _initial =>
-      name.isNotEmpty ? name.trim()[0].toUpperCase() : 'U';
+  String get _initial => name.isNotEmpty ? name.trim()[0].toUpperCase() : 'U';
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(20),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -281,18 +270,18 @@ class _ProfileHeaderCard extends StatelessWidget {
               children: <Widget>[
                 Text(
                   name,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF111827),
+                    color: cs.onSurface,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
-                    color: Color(0xFF6B7280),
+                    color: cs.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
               ],
@@ -300,11 +289,7 @@ class _ProfileHeaderCard extends StatelessWidget {
           ),
           IconButton(
             onPressed: onEditTap,
-            icon: const Icon(
-              Icons.edit_outlined,
-              color: Color(0xFF6E3EFF),
-              size: 20,
-            ),
+            icon: const Icon(Icons.edit_outlined, color: Color(0xFF6E3EFF), size: 20),
             tooltip: 'Edit name',
           ),
         ],
@@ -313,7 +298,7 @@ class _ProfileHeaderCard extends StatelessWidget {
   }
 }
 
-// ─── Settings widgets ─────────────────────────────────────────────────────────
+// ─── Settings item ────────────────────────────────────────────────────────────
 
 class _SettingsItem extends StatelessWidget {
   const _SettingsItem({
@@ -328,8 +313,10 @@ class _SettingsItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Material(
-      color: Colors.white,
+      color: cs.surface,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -338,21 +325,21 @@ class _SettingsItem extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           child: Row(
             children: <Widget>[
-              Icon(icon, color: const Color(0xFF374151)),
+              Icon(icon, color: cs.onSurface.withValues(alpha: 0.75)),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF111827),
+                    color: cs.onSurface,
                   ),
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.chevron_right_rounded,
-                color: Color(0xFF9CA3AF),
+                color: cs.onSurface.withValues(alpha: 0.4),
               ),
             ],
           ),
@@ -361,6 +348,8 @@ class _SettingsItem extends StatelessWidget {
     );
   }
 }
+
+// ─── Settings toggle item ─────────────────────────────────────────────────────
 
 class _SettingsToggleItem extends StatelessWidget {
   const _SettingsToggleItem({
@@ -379,14 +368,16 @@ class _SettingsToggleItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Material(
-      color: Colors.white,
+      color: cs.surface,
       borderRadius: BorderRadius.circular(16),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         child: Row(
           children: <Widget>[
-            Icon(icon, color: const Color(0xFF374151)),
+            Icon(icon, color: cs.onSurface.withValues(alpha: 0.75)),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -394,29 +385,26 @@ class _SettingsToggleItem extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF111827),
+                      color: cs.onSurface,
                     ),
                   ),
                   if (subtitle != null) ...<Widget>[
                     const SizedBox(height: 2),
                     Text(
                       subtitle!,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: Color(0xFF6B7280),
+                        color: cs.onSurface.withValues(alpha: 0.6),
                       ),
                     ),
                   ],
                 ],
               ),
             ),
-            Switch(
-              value: value,
-              onChanged: onChanged,
-            ),
+            Switch(value: value, onChanged: onChanged),
           ],
         ),
       ),
@@ -424,7 +412,7 @@ class _SettingsToggleItem extends StatelessWidget {
   }
 }
 
-// ─── SMS debug widgets ────────────────────────────────────────────────────────
+// ─── SMS debug panel ──────────────────────────────────────────────────────────
 
 class _SmsDebugPanel extends StatelessWidget {
   const _SmsDebugPanel({
@@ -441,33 +429,35 @@ class _SmsDebugPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
+        color: cs.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text(
+          Text(
             'SMS Debug',
             style: TextStyle(
               fontWeight: FontWeight.w700,
-              color: Color(0xFF374151),
+              color: cs.onSurface,
             ),
           ),
           const SizedBox(height: 6),
-          Text('Inbox scanned: $inboxCount', style: _debugStyle),
+          Text('Inbox scanned: $inboxCount', style: _style(cs)),
           if (lastSms != null) ...<Widget>[
             const SizedBox(height: 4),
-            Text('Last SMS from: ${lastSms!.sender}', style: _debugStyle),
+            Text('Last SMS from: ${lastSms!.sender}', style: _style(cs)),
             Text(
               lastSms!.body,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: _debugStyle,
+              style: _style(cs),
             ),
           ],
           if (lastParsed != null) ...<Widget>[
@@ -475,22 +465,22 @@ class _SmsDebugPanel extends StatelessWidget {
             Text(
               'Last parsed: ₹${lastParsed!.amount} ${lastParsed!.type} '
               '• ${lastParsed!.merchant}',
-              style: _debugStyle.copyWith(color: const Color(0xFF059669)),
+              style: _style(cs).copyWith(color: const Color(0xFF059669)),
             ),
           ],
           if (lastFailure != null) ...<Widget>[
             const SizedBox(height: 4),
             Text(
               'Last failure: $lastFailure',
-              style: _debugStyle.copyWith(color: const Color(0xFFDC2626)),
+              style: _style(cs).copyWith(color: cs.error),
             ),
           ],
           const SizedBox(height: 4),
           Text(
             'Keep app in foreground for adb emu sms send',
-            style: _debugStyle.copyWith(
+            style: _style(cs).copyWith(
               fontSize: 11,
-              color: const Color(0xFF9CA3AF),
+              color: cs.onSurface.withValues(alpha: 0.4),
             ),
           ),
         ],
@@ -498,11 +488,13 @@ class _SmsDebugPanel extends StatelessWidget {
     );
   }
 
-  static const TextStyle _debugStyle = TextStyle(
-    fontSize: 12,
-    color: Color(0xFF4B5563),
-  );
+  TextStyle _style(ColorScheme cs) => TextStyle(
+        fontSize: 12,
+        color: cs.onSurface.withValues(alpha: 0.75),
+      );
 }
+
+// ─── SMS parsed preview ───────────────────────────────────────────────────────
 
 class _SmsParsedPreview extends StatelessWidget {
   const _SmsParsedPreview({required this.transactions});
@@ -511,20 +503,22 @@ class _SmsParsedPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text(
+          Text(
             'Recent parsed SMS',
             style: TextStyle(
               fontWeight: FontWeight.w600,
-              color: Color(0xFF374151),
+              color: cs.onSurface,
             ),
           ),
           const SizedBox(height: 8),
@@ -533,7 +527,7 @@ class _SmsParsedPreview extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 4),
               child: Text(
                 '₹${tx.amount} ${tx.type} • ${tx.merchant}',
-                style: const TextStyle(fontSize: 13),
+                style: TextStyle(fontSize: 13, color: cs.onSurface),
               ),
             );
           }),

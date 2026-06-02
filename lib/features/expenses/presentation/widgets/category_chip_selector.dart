@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 
 class CategoryItem {
-  const CategoryItem({
-    required this.label,
-    required this.icon,
-  });
+  const CategoryItem({required this.label, required this.icon});
 
   final String label;
   final IconData icon;
@@ -24,6 +21,8 @@ class CategoryChipSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return SizedBox(
       height: 48,
       child: ListView.separated(
@@ -43,7 +42,7 @@ class CategoryChipSelector extends StatelessWidget {
                 Icon(
                   category.icon,
                   size: 18,
-                  color: isSelected ? Colors.white : const Color(0xFF4B5563),
+                  color: isSelected ? Colors.white : cs.onSurface.withValues(alpha: 0.7),
                 ),
                 const SizedBox(width: 6),
                 Text(category.label),
@@ -53,13 +52,12 @@ class CategoryChipSelector extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
             ),
             side: BorderSide(
-              color:
-                  isSelected ? Colors.transparent : const Color(0xFFE5E7EB),
+              color: isSelected ? Colors.transparent : cs.outlineVariant,
             ),
-            backgroundColor: Colors.white,
+            backgroundColor: cs.surface,
             selectedColor: const Color(0xFF6E3EFF),
             labelStyle: TextStyle(
-              color: isSelected ? Colors.white : const Color(0xFF374151),
+              color: isSelected ? Colors.white : cs.onSurface,
               fontWeight: FontWeight.w600,
             ),
           );

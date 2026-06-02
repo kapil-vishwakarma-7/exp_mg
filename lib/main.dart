@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'features/expenses/providers/expense_provider.dart';
+import 'features/expenses/providers/theme_provider.dart';
 import 'features/expenses/providers/user_provider.dart';
 import 'features/expenses/presentation/screens/home_screen.dart';
 import 'features/sms/providers/sms_tracking_provider.dart';
@@ -18,9 +19,9 @@ Future<void> main() async {
   runApp(
     MultiProvider(
       providers: <ChangeNotifierProvider<dynamic>>[
-        // Use create: (not .value) so Provider owns the lifecycle and disposes
-        // the notifier correctly. loadUser() is called via addPostFrameCallback
-        // to ensure the widget tree is fully mounted before any notification fires.
+        ChangeNotifierProvider<ThemeProvider>(
+          create: (_) => ThemeProvider(),
+        ),
         ChangeNotifierProvider<UserProvider>(
           create: (_) => UserProvider(),
         ),
@@ -49,9 +50,8 @@ class _AppRootState extends State<_AppRoot> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _wireSmsRefresh();
-      // Load user name after the first frame so the tree is fully mounted
-      // before any notifyListeners() call from UserProvider fires.
       context.read<UserProvider>().loadUser();
+      context.read<ThemeProvider>().loadTheme();
     });
   }
 
@@ -71,19 +71,62 @@ class _AppRootState extends State<_AppRoot> {
 class ExpenseTrackerApp extends StatelessWidget {
   const ExpenseTrackerApp({super.key});
 
+  // Shared seed colour used in both themes so the purple accent is consistent.
+  static const Color _seed = Color(0xFF6E3EFF);
+
   @override
   Widget build(BuildContext context) {
+    final themeMode = context.watch<ThemeProvider>().themeMode;
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Expense Tracker',
+      themeMode: themeMode,
+      // ── Light theme ──────────────────────────────────────────────────────
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        scaffoldBackgroundColor: const Color(0xFFF7F8FA),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: _seed,
+          brightness: Brightness.light,
+          surface: const Color(0xFFF6F7FB),
+        ),
+        scaffoldBackgroundColor: const Color(0xFFF6F7FB),
         useMaterial3: true,
         cardTheme: const CardThemeData(
           elevation: 0,
           color: Colors.white,
           margin: EdgeInsets.zero,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFFF6F7FB),
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+        ),
+        bottomAppBarTheme: const BottomAppBarThemeData(
+          color: Colors.white,
+          elevation: 2,
+        ),
+      ),
+      // ── Dark theme ───────────────────────────────────────────────────────
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: _seed,
+          brightness: Brightness.dark,
+          surface: const Color(0xFF1C1C1E),
+        ),
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        useMaterial3: true,
+        cardTheme: const CardThemeData(
+          elevation: 0,
+          margin: EdgeInsets.zero,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF121212),
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+        ),
+        bottomAppBarTheme: const BottomAppBarThemeData(
+          color: Color(0xFF1C1C1E),
+          elevation: 2,
         ),
       ),
       home: const HomeScreen(),

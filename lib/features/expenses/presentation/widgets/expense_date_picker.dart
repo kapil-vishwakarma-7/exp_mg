@@ -13,6 +13,7 @@ class ExpenseDatePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final text = DateFormat('dd MMM yyyy').format(date);
 
     return InkWell(
@@ -21,29 +22,29 @@ class ExpenseDatePicker extends StatelessWidget {
       child: Ink(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cs.surface,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
           children: <Widget>[
-            const Icon(
+            Icon(
               Icons.calendar_today_outlined,
               size: 18,
-              color: Color(0xFF4B5563),
+              color: cs.onSurface.withValues(alpha: 0.7),
             ),
             const SizedBox(width: 10),
             Text(
               text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
-                color: Color(0xFF111827),
+                color: cs.onSurface,
               ),
             ),
             const Spacer(),
-            const Icon(
+            Icon(
               Icons.keyboard_arrow_down_rounded,
-              color: Color(0xFF4B5563),
+              color: cs.onSurface.withValues(alpha: 0.7),
             ),
           ],
         ),

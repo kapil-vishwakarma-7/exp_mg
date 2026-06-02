@@ -33,8 +33,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
       appBar: AppBar(
         title: const Text('Transactions'),
         actions: <Widget>[
@@ -91,9 +92,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 else if (visibleItems.isEmpty)
                   const _EmptyState()
                 else ...<Widget>[
-                  ..._buildGroup(grouped, 'Today'),
-                  ..._buildGroup(grouped, 'Yesterday'),
-                  ..._buildGroup(grouped, 'Older'),
+                  ..._buildGroup(grouped, 'Today', cs),
+                  ..._buildGroup(grouped, 'Yesterday', cs),
+                  ..._buildGroup(grouped, 'Older', cs),
                 ],
                 const SizedBox(height: 12),
               ],
@@ -124,6 +125,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   List<Widget> _buildGroup(
     Map<String, List<Expense>> grouped,
     String title,
+    ColorScheme cs,
   ) {
     final sectionItems = grouped[title];
     if (sectionItems == null || sectionItems.isEmpty) return <Widget>[];
@@ -133,10 +135,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         padding: const EdgeInsets.only(bottom: 10),
         child: Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF111827),
+            color: cs.onSurface,
           ),
         ),
       ),
@@ -174,6 +176,8 @@ class _SearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return TextField(
       controller: controller,
       onChanged: onChanged,
@@ -181,7 +185,7 @@ class _SearchBar extends StatelessWidget {
         hintText: 'Search transactions',
         prefixIcon: const Icon(Icons.search_rounded),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: cs.surface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
@@ -204,6 +208,8 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return ChoiceChip(
       label: Text(label),
       selected: selected,
@@ -212,12 +218,12 @@ class _FilterChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
       ),
       side: BorderSide(
-        color: selected ? Colors.transparent : const Color(0xFFE5E7EB),
+        color: selected ? Colors.transparent : cs.outlineVariant,
       ),
-      backgroundColor: Colors.white,
-      selectedColor: const Color(0xFF6E3EFF),
+      backgroundColor: cs.surface,
+      selectedColor: cs.primary,
       labelStyle: TextStyle(
-        color: selected ? Colors.white : const Color(0xFF374151),
+        color: selected ? Colors.white : cs.onSurface,
         fontWeight: FontWeight.w600,
       ),
     );
@@ -229,10 +235,12 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -240,21 +248,21 @@ class _EmptyState extends StatelessWidget {
           Icon(
             Icons.receipt_long_outlined,
             size: 44,
-            color: Colors.grey.shade400,
+            color: cs.onSurface.withValues(alpha: 0.35),
           ),
           const SizedBox(height: 10),
-          const Text(
+          Text(
             'No transactions found',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF111827),
+              color: cs.onSurface,
             ),
           ),
           const SizedBox(height: 4),
-          const Text(
+          Text(
             'Try changing your search or filter.',
-            style: TextStyle(color: Color(0xFF6B7280)),
+            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55)),
           ),
         ],
       ),

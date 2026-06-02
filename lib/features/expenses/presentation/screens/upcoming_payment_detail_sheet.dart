@@ -22,11 +22,13 @@ class UpcomingPaymentDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF6F7FB),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -37,11 +39,14 @@ class UpcomingPaymentDetailSheet extends StatelessWidget {
               Container(
                 width: 44,
                 height: 44,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(categoryIcon(payment.category)),
+                child: Icon(
+                  categoryIcon(payment.category),
+                  color: cs.onSurface,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -50,9 +55,10 @@ class UpcomingPaymentDetailSheet extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       payment.title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
+                        color: cs.onSurface,
                       ),
                     ),
                     Text(
@@ -76,10 +82,7 @@ class UpcomingPaymentDetailSheet extends StatelessWidget {
           ),
           _DetailRow(
             label: 'Frequency',
-            value: formatFrequencyLabel(
-              payment.frequency,
-              payment.interval,
-            ),
+            value: formatFrequencyLabel(payment.frequency, payment.interval),
           ),
           _DetailRow(label: 'Category', value: payment.category),
           if (payment.endDate != null)
@@ -102,6 +105,8 @@ class _DetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -110,15 +115,15 @@ class _DetailRow extends StatelessWidget {
             width: 90,
             child: Text(
               label,
-              style: const TextStyle(color: Color(0xFF6B7280)),
+              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6)),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF111827),
+                color: cs.onSurface,
               ),
             ),
           ),

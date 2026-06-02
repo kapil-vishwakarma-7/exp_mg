@@ -80,19 +80,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF6F7FB),
-        elevation: 0,
         title: const Text('Analytics'),
         actions: <Widget>[
           Consumer<ExpenseProvider>(
             builder: (context, provider, child) {
               final months = _monthOptions(provider.expenses);
-              if (months.isEmpty) {
-                return const SizedBox.shrink();
-              }
+              if (months.isEmpty) return const SizedBox.shrink();
 
               final selectedExists = months.any(
                 (month) =>
@@ -116,15 +113,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 margin: const EdgeInsets.only(right: 16),
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: cs.surface,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<DateTime>(
                     value: dropdownValue,
                     icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                    style: const TextStyle(
-                      color: Color(0xFF111827),
+                    dropdownColor: cs.surface,
+                    style: TextStyle(
+                      color: cs.onSurface,
                       fontWeight: FontWeight.w600,
                     ),
                     items: months
@@ -202,18 +200,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   children: <Widget>[
                     Text(
                       'Total Spending (${_analyticsService.formatMonthLabel(snapshot.month)})',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
-                        color: Color(0xFF6B7280),
+                        color: cs.onSurface.withValues(alpha: 0.6),
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       _analyticsService.formatCurrency(snapshot.monthlySpending),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 36,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF111827),
+                        color: cs.onSurface,
                       ),
                     ),
                   ],
@@ -224,12 +222,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    const Text(
+                    Text(
                       'Category Distribution',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF111827),
+                        color: cs.onSurface,
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -246,8 +244,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 8),
                                   child: _LegendItem(
-                                    color:
-                                        _chartColors[index % _chartColors.length],
+                                    color: _chartColors[
+                                        index % _chartColors.length],
                                     label: category.key,
                                   ),
                                 );
@@ -265,19 +263,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    const Text(
+                    Text(
                       'Insights',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF111827),
+                        color: cs.onSurface,
                       ),
                     ),
                     const SizedBox(height: 12),
                     if (topCategory != null)
                       _InsightTile(
-                        text:
-                            'You spent $topCategoryPercent% on $topCategory',
+                        text: 'You spent $topCategoryPercent% on $topCategory',
                       ),
                     if (topCategory != null) const SizedBox(height: 8),
                     if (highestDay != null)
@@ -289,12 +286,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'Categories',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF111827),
+                  color: cs.onSurface,
                 ),
               ),
               const SizedBox(height: 10),
@@ -333,6 +330,8 @@ class _AnalyticsEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -342,22 +341,22 @@ class _AnalyticsEmptyState extends StatelessWidget {
             Icon(
               Icons.bar_chart_outlined,
               size: 56,
-              color: Colors.grey.shade400,
+              color: cs.onSurface.withValues(alpha: 0.35),
             ),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'No analytics yet',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF111827),
+                color: cs.onSurface,
               ),
             ),
             const SizedBox(height: 6),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF6B7280)),
+              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6)),
             ),
           ],
         ),
@@ -373,10 +372,12 @@ class _CardContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(20),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -392,32 +393,28 @@ class _CardContainer extends StatelessWidget {
 }
 
 class _LegendItem extends StatelessWidget {
-  const _LegendItem({
-    required this.color,
-    required this.label,
-  });
+  const _LegendItem({required this.color, required this.label});
 
   final Color color;
   final String label;
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Row(
       children: <Widget>[
         Container(
           width: 10,
           height: 10,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 8),
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 14,
-            color: Color(0xFF374151),
+            color: cs.onSurface.withValues(alpha: 0.8),
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -433,11 +430,13 @@ class _InsightTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
+        color: cs.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -451,9 +450,9 @@ class _InsightTile extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: Color(0xFF111827),
+                color: cs.onSurface,
                 fontWeight: FontWeight.w500,
               ),
             ),

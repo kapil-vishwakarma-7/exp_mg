@@ -56,11 +56,9 @@ class _UpcomingPaymentsSectionState extends State<UpcomingPaymentsSection> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const _UpcomingLoadingState();
         }
-
         if (snapshot.hasError) {
           return _UpcomingErrorState(message: snapshot.error.toString());
         }
-
         final payments = snapshot.data ?? const <RecurringExpense>[];
         return _UpcomingPaymentsContent(
           payments: payments,
@@ -82,6 +80,7 @@ class _UpcomingPaymentsContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final visible = payments.take(maxItems).toList();
 
     return Column(
@@ -89,12 +88,12 @@ class _UpcomingPaymentsContent extends StatelessWidget {
       children: <Widget>[
         Row(
           children: <Widget>[
-            const Text(
+            Text(
               'Upcoming Payments',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF121826),
+                color: cs.onSurface,
               ),
             ),
             const Spacer(),
@@ -114,8 +113,8 @@ class _UpcomingPaymentsContent extends StatelessWidget {
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: payments.isEmpty
-                      ? const Color(0xFFD1D5DB)
-                      : const Color(0xFF6B7280),
+                      ? cs.onSurface.withValues(alpha: 0.3)
+                      : cs.onSurface.withValues(alpha: 0.55),
                 ),
               ),
             ),
@@ -154,7 +153,9 @@ class _UpcomingLoadingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
+    final cs = Theme.of(context).colorScheme;
+
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
@@ -162,11 +163,11 @@ class _UpcomingLoadingState extends StatelessWidget {
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF121826),
+            color: cs.onSurface,
           ),
         ),
-        SizedBox(height: 14),
-        SizedBox(
+        const SizedBox(height: 14),
+        const SizedBox(
           height: 80,
           child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
         ),
@@ -182,21 +183,23 @@ class _UpcomingErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const Text(
+        Text(
           'Upcoming Payments',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF121826),
+            color: cs.onSurface,
           ),
         ),
         const SizedBox(height: 14),
         Text(
           'Could not load payments',
-          style: TextStyle(color: Colors.red.shade700, fontSize: 14),
+          style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 14),
         ),
       ],
     );
@@ -208,11 +211,13 @@ class _UpcomingEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -222,13 +227,13 @@ class _UpcomingEmptyState extends StatelessWidget {
           ),
         ],
       ),
-      child: const Text(
+      child: Text(
         'No upcoming payments 🎉',
         textAlign: TextAlign.center,
         style: TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w500,
-          color: Color(0xFF6B7280),
+          color: cs.onSurface.withValues(alpha: 0.6),
         ),
       ),
     );

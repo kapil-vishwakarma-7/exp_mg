@@ -18,11 +18,27 @@ class UpcomingPaymentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final urgent = isUrgentPayment(payment.nextDueDate);
     final dueLabel = formatDueDate(payment.nextDueDate);
     final frequencyLabel =
         formatFrequencyLabel(payment.frequency, payment.interval);
     final borderRadius = BorderRadius.circular(20);
+
+    // Colours that depend on whether the card has the gradient highlight.
+    final iconBg = isHighlighted
+        ? Colors.white.withValues(alpha: 0.2)
+        : cs.surfaceContainerHighest;
+    final iconColor = isHighlighted ? Colors.white : cs.onSurface;
+    final titleColor = isHighlighted ? Colors.white : cs.onSurface;
+    final subtitleColor = isHighlighted
+        ? Colors.white.withValues(alpha: 0.85)
+        : cs.onSurface.withValues(alpha: 0.6);
+    final dueColor = urgent && !isHighlighted
+        ? const Color(0xFFE44B75)
+        : isHighlighted
+            ? Colors.white.withValues(alpha: 0.9)
+            : cs.onSurface.withValues(alpha: 0.6);
 
     final content = Padding(
       padding: const EdgeInsets.all(16),
@@ -35,17 +51,13 @@ class UpcomingPaymentCard extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: isHighlighted
-                      ? Colors.white.withValues(alpha: 0.2)
-                      : const Color(0xFFF1F3F7),
+                  color: iconBg,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   categoryIcon(payment.category),
                   size: 20,
-                  color: isHighlighted
-                      ? Colors.white
-                      : const Color(0xFF252A3A),
+                  color: iconColor,
                 ),
               ),
               if (urgent) ...<Widget>[
@@ -81,7 +93,7 @@ class UpcomingPaymentCard extends StatelessWidget {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
-              color: isHighlighted ? Colors.white : const Color(0xFF111827),
+              color: titleColor,
             ),
           ),
           const SizedBox(height: 4),
@@ -90,7 +102,7 @@ class UpcomingPaymentCard extends StatelessWidget {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: isHighlighted ? Colors.white : const Color(0xFF111827),
+              color: titleColor,
             ),
           ),
           const SizedBox(height: 4),
@@ -99,22 +111,13 @@ class UpcomingPaymentCard extends StatelessWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: urgent && !isHighlighted
-                  ? const Color(0xFFE44B75)
-                  : isHighlighted
-                      ? Colors.white.withValues(alpha: 0.9)
-                      : Colors.black54,
+              color: dueColor,
             ),
           ),
           const SizedBox(height: 2),
           Text(
             frequencyLabel,
-            style: TextStyle(
-              fontSize: 12,
-              color: isHighlighted
-                  ? Colors.white.withValues(alpha: 0.85)
-                  : Colors.black45,
-            ),
+            style: TextStyle(fontSize: 12, color: subtitleColor),
           ),
         ],
       ),
@@ -148,7 +151,7 @@ class UpcomingPaymentCard extends StatelessWidget {
               )
             : DecoratedBox(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: cs.surface,
                   borderRadius: borderRadius,
                 ),
                 child: content,

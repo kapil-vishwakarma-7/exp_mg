@@ -18,10 +18,12 @@ class AnalyticsCategoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -41,19 +43,19 @@ class AnalyticsCategoryTile extends StatelessWidget {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF111827),
+                    color: cs.onSurface,
                   ),
                 ),
               ),
               Text(
                 amount,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF111827),
+                  color: cs.onSurface,
                 ),
               ),
             ],
@@ -65,7 +67,7 @@ class AnalyticsCategoryTile extends StatelessWidget {
               value: progress,
               minHeight: 8,
               color: color,
-              backgroundColor: const Color(0xFFE5E7EB),
+              backgroundColor: cs.surfaceContainerHighest,
             ),
           ),
         ],

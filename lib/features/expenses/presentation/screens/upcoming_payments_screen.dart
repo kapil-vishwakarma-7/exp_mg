@@ -39,20 +39,19 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
-      appBar: AppBar(
-        title: const Text('Upcoming Payments'),
-      ),
+      appBar: AppBar(title: const Text('Upcoming Payments')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _payments.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text(
                     'No upcoming payments 🎉',
                     style: TextStyle(
                       fontSize: 16,
-                      color: Color(0xFF6B7280),
+                      color: cs.onSurface.withValues(alpha: 0.6),
                     ),
                   ),
                 )
@@ -65,7 +64,7 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
                     final urgent = isUrgentPayment(payment.nextDueDate);
 
                     return Material(
-                      color: Colors.white,
+                      color: cs.surface,
                       borderRadius: BorderRadius.circular(16),
                       child: InkWell(
                         onTap: () => UpcomingPaymentDetailSheet.show(
@@ -80,25 +79,26 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
                               Container(
                                 width: 42,
                                 height: 42,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFF2F4F8),
+                                decoration: BoxDecoration(
+                                  color: cs.surfaceContainerHighest,
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
                                   categoryIcon(payment.category),
+                                  color: cs.onSurface,
                                 ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
                                     Text(
                                       payment.title,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontWeight: FontWeight.w600,
                                         fontSize: 15,
+                                        color: cs.onSurface,
                                       ),
                                     ),
                                     Text(
@@ -106,9 +106,10 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
                                         payment.frequency,
                                         payment.interval,
                                       ),
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 12,
-                                        color: Color(0xFF6B7280),
+                                        color: cs.onSurface
+                                            .withValues(alpha: 0.6),
                                       ),
                                     ),
                                   ],
@@ -119,8 +120,9 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
                                 children: <Widget>[
                                   Text(
                                     formatExpenseAmount(payment.amount),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontWeight: FontWeight.w700,
+                                      color: cs.onSurface,
                                     ),
                                   ),
                                   Text(
@@ -130,7 +132,7 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
                                       fontWeight: FontWeight.w600,
                                       color: urgent
                                           ? const Color(0xFFE44B75)
-                                          : const Color(0xFF6B7280),
+                                          : cs.onSurface.withValues(alpha: 0.6),
                                     ),
                                   ),
                                 ],

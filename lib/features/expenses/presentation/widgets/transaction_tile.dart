@@ -18,10 +18,12 @@ class TransactionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -36,13 +38,13 @@ class TransactionTile extends StatelessWidget {
           Container(
             width: 42,
             height: 42,
-            decoration: const BoxDecoration(
-              color: Color(0xFFF2F4F8),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest,
               shape: BoxShape.circle,
             ),
             child: Icon(
               icon ?? Icons.account_balance_wallet_outlined,
-              color: const Color(0xFF1F2937),
+              color: cs.onSurface,
             ),
           ),
           const SizedBox(width: 12),
@@ -54,13 +56,14 @@ class TransactionTile extends StatelessWidget {
                   title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
                       ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   dateTimeText,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.black54,
+                        color: cs.onSurface.withValues(alpha: 0.55),
                       ),
                 ),
               ],
@@ -69,8 +72,9 @@ class TransactionTile extends StatelessWidget {
           Text(
             amount,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color:
-                      isExpense ? const Color(0xFFE44B75) : const Color(0xFF0FA968),
+                  color: isExpense
+                      ? const Color(0xFFE44B75)
+                      : const Color(0xFF0FA968),
                   fontWeight: FontWeight.bold,
                 ),
           ),
