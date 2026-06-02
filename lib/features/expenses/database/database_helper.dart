@@ -15,9 +15,10 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const String _databaseName = 'expenses.db';
-  static const int _databaseVersion = 6;
+  static const int _databaseVersion = 7;
   static const String tableExpenses = 'expenses';
   static const String tableRecurringExpenses = 'recurring_expenses';
+  static const String tableUserProfile = 'user_profile';
 
   Database? _database;
 
@@ -44,6 +45,7 @@ class DatabaseHelper {
     debugPrint('[DB] onCreate v$version');
     await _createExpensesTable(db);
     await _createRecurringExpensesTable(db);
+    await _createUserProfileTable(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -81,6 +83,10 @@ class DatabaseHelper {
 
     if (oldVersion < 6) {
       await _migrateExpensesTransactionTime(db);
+    }
+
+    if (oldVersion < 7) {
+      await _createUserProfileTable(db);
     }
   }
 
@@ -376,6 +382,53 @@ class DatabaseHelper {
     );
     debugPrint('[DB] updateNextDueDate id=$id next=$value updated=$updated');
     return updated;
+  }
+
+  Future<void> _createUserProfileTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $tableUserProfile(
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    ''');
+    debugPrint('[DB] user_profile table ready');
+  }
+
+  /// Inserts or updates the single user profile row.
+  Future<void> insertOrUpdateUser(String name) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    final rows = await db.query(tableUserProfile, limit: 1);
+    if (rows.isEmpty) {
+      await db.insert(tableUserProfile, <String, Object?>{
+        'id': 1,
+        'name': name,
+        'created_at': now,
+      });
+      debugPrint('[USER] Inserted in DB: $name');
+    } else {
+      await db.update(
+        tableUserProfile,
+        <String, Object?>{'name': name},
+        where: 'id = ?',
+        whereArgs: <Object>[1],
+      );
+      debugPrint('[USER] Updated in DB: $name');
+    }
+  }
+
+  /// Returns the stored user name, or "User" if none exists.
+  Future<String> getUserName() async {
+    final db = await database;
+    final rows = await db.query(tableUserProfile, limit: 1);
+    if (rows.isEmpty) {
+      debugPrint('[USER] No profile found — returning default');
+      return 'User';
+    }
+    final name = rows.first['name'] as String;
+    debugPrint('[USER] Loaded from DB: $name');
+    return name;
   }
 
   Future<void> logDebugDashboard() => logRecurringDebugDashboard(this);

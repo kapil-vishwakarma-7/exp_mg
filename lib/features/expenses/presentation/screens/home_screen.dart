@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/expense_provider.dart';
+import '../../providers/user_provider.dart';
 import '../utils/expense_ui_helpers.dart';
 import 'add_expense_screen.dart';
 import 'analytics_screen.dart';
@@ -43,20 +44,22 @@ class _HomeScreenState extends State<HomeScreen> {
           children: <Widget>[
             Row(
               children: <Widget>[
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(
-                        'Hello, Kapil!',
-                        style: TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF121826),
+                      Consumer<UserProvider>(
+                        builder: (context, userProvider, _) => Text(
+                          'Hello, ${userProvider.name}!',
+                          style: const TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF121826),
+                          ),
                         ),
                       ),
-                      SizedBox(height: 4),
-                      Text(
+                      const SizedBox(height: 4),
+                      const Text(
                         'Track your money, stay in control',
                         style: TextStyle(
                           fontSize: 14,

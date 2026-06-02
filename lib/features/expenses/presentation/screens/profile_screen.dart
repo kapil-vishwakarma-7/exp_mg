@@ -5,6 +5,7 @@ import '../../../sms/models/parsed_transaction.dart';
 import '../../../sms/models/sms_message.dart';
 import '../../../sms/providers/sms_tracking_provider.dart';
 import '../../providers/expense_provider.dart';
+import '../../providers/user_provider.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -15,6 +16,101 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _darkModeEnabled = false;
+
+  /// Opens an inline bottom sheet to edit the user's name.
+  Future<void> _editName(BuildContext context) async {
+    final userProvider = context.read<UserProvider>();
+    final controller = TextEditingController(text: userProvider.name);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
+        return Padding(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF6F7FB),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Text(
+                  'Edit Name',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(
+                    hintText: 'Enter your name',
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: <Color>[Color(0xFF6E3EFF), Color(0xFF8B5CFF)],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: TextButton(
+                      onPressed: () async {
+                        final newName = controller.text;
+                        if (newName.trim().isEmpty) return;
+                        // Pop the sheet BEFORE notifying listeners so no
+                        // sheet widget is in the tree when Provider rebuilds.
+                        Navigator.of(sheetContext).pop();
+                        await userProvider.updateName(newName);
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text(
+                        'Save',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    controller.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,15 +123,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: <Widget>[
-            _ProfileHeaderCard(
-              name: 'Kapil Vishwakarma',
-              subtitle: 'Track your expenses',
+            Consumer<UserProvider>(
+              builder: (context, userProvider, _) => _ProfileHeaderCard(
+                name: userProvider.name,
+                subtitle: 'Track your expenses',
+                onEditTap: () => _editName(context),
+              ),
             ),
             const SizedBox(height: 18),
             _SettingsItem(
               icon: Icons.person_outline_rounded,
-              title: 'Account',
-              onTap: () {},
+              title: 'Edit Name',
+              onTap: () => _editName(context),
             ),
             const SizedBox(height: 10),
             _SettingsItem(
@@ -119,14 +218,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
+// ─── Profile header card ─────────────────────────────────────────────────────
+
 class _ProfileHeaderCard extends StatelessWidget {
   const _ProfileHeaderCard({
     required this.name,
     required this.subtitle,
+    required this.onEditTap,
   });
 
   final String name;
   final String subtitle;
+  final VoidCallback onEditTap;
+
+  /// First letter of the name for the avatar, uppercased.
+  String get _initial =>
+      name.isNotEmpty ? name.trim()[0].toUpperCase() : 'U';
 
   @override
   Widget build(BuildContext context) {
@@ -156,10 +263,10 @@ class _ProfileHeaderCard extends StatelessWidget {
                 end: Alignment.bottomRight,
               ),
             ),
-            child: const Center(
+            child: Center(
               child: Text(
-                'K',
-                style: TextStyle(
+                _initial,
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -191,11 +298,22 @@ class _ProfileHeaderCard extends StatelessWidget {
               ],
             ),
           ),
+          IconButton(
+            onPressed: onEditTap,
+            icon: const Icon(
+              Icons.edit_outlined,
+              color: Color(0xFF6E3EFF),
+              size: 20,
+            ),
+            tooltip: 'Edit name',
+          ),
         ],
       ),
     );
   }
 }
+
+// ─── Settings widgets ─────────────────────────────────────────────────────────
 
 class _SettingsItem extends StatelessWidget {
   const _SettingsItem({
@@ -305,6 +423,8 @@ class _SettingsToggleItem extends StatelessWidget {
     );
   }
 }
+
+// ─── SMS debug widgets ────────────────────────────────────────────────────────
 
 class _SmsDebugPanel extends StatelessWidget {
   const _SmsDebugPanel({
@@ -422,6 +542,8 @@ class _SmsParsedPreview extends StatelessWidget {
     );
   }
 }
+
+// ─── Logout button ────────────────────────────────────────────────────────────
 
 class _LogoutButton extends StatelessWidget {
   const _LogoutButton({required this.onTap});

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'features/expenses/providers/expense_provider.dart';
+import 'features/expenses/providers/user_provider.dart';
 import 'features/expenses/presentation/screens/home_screen.dart';
 import 'features/sms/providers/sms_tracking_provider.dart';
 import 'features/sms/services/sms_debug_bootstrap.dart';
@@ -17,6 +18,12 @@ Future<void> main() async {
   runApp(
     MultiProvider(
       providers: <ChangeNotifierProvider<dynamic>>[
+        // Use create: (not .value) so Provider owns the lifecycle and disposes
+        // the notifier correctly. loadUser() is called via addPostFrameCallback
+        // to ensure the widget tree is fully mounted before any notification fires.
+        ChangeNotifierProvider<UserProvider>(
+          create: (_) => UserProvider(),
+        ),
         ChangeNotifierProvider<ExpenseProvider>(
           create: (_) => ExpenseProvider()..initialize(),
         ),
@@ -40,7 +47,12 @@ class _AppRootState extends State<_AppRoot> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _wireSmsRefresh());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _wireSmsRefresh();
+      // Load user name after the first frame so the tree is fully mounted
+      // before any notifyListeners() call from UserProvider fires.
+      context.read<UserProvider>().loadUser();
+    });
   }
 
   void _wireSmsRefresh() {
