@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/expense.dart';
@@ -7,6 +8,7 @@ import '../../services/analytics_service.dart';
 import '../utils/expense_ui_helpers.dart';
 import '../widgets/analytics_category_tile.dart';
 import '../widgets/analytics_pie_chart.dart';
+import '../widgets/spending_bar_chart.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
@@ -18,7 +20,9 @@ class AnalyticsScreen extends StatefulWidget {
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
   final AnalyticsService _analyticsService = AnalyticsService();
 
+  // Normalised to the first day of the month — no time component.
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
+
   AnalyticsSnapshot? _cachedSnapshot;
   int? _cacheKey;
 
@@ -39,12 +43,41 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     });
   }
 
+  // ── Month navigation ────────────────────────────────────────────────────────
+
+  bool get _isCurrentMonth {
+    final now = DateTime.now();
+    return _selectedMonth.year == now.year &&
+        _selectedMonth.month == now.month;
+  }
+
+  void _goToPreviousMonth() {
+    setState(() {
+      _selectedMonth =
+          DateTime(_selectedMonth.year, _selectedMonth.month - 1);
+      _cachedSnapshot = null;
+      _cacheKey = null;
+    });
+  }
+
+  void _goToNextMonth() {
+    if (_isCurrentMonth) return; // never navigate into the future
+    setState(() {
+      _selectedMonth =
+          DateTime(_selectedMonth.year, _selectedMonth.month + 1);
+      _cachedSnapshot = null;
+      _cacheKey = null;
+    });
+  }
+
+  // ── Snapshot caching ────────────────────────────────────────────────────────
+
   AnalyticsSnapshot _snapshotFor(List<Expense> expenses) {
     final cacheKey = Object.hash(
       _selectedMonth.year,
       _selectedMonth.month,
       expenses.length,
-      expenses.fold<double>(0, (sum, expense) => sum + expense.amount),
+      expenses.fold<double>(0, (sum, e) => sum + e.amount),
     );
 
     if (_cachedSnapshot != null && _cacheKey == cacheKey) {
@@ -60,273 +93,353 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     return _cachedSnapshot!;
   }
 
-  List<DateTime> _monthOptions(List<Expense> expenses) {
-    final keys = <String, DateTime>{};
-    final now = DateTime.now();
-    keys['${now.year}-${now.month}'] = DateTime(now.year, now.month);
-
-    for (final expense in expenses) {
-      final month = DateTime(expense.date.year, expense.date.month);
-      keys['${month.year}-${month.month}'] = month;
-    }
-
-    final months = keys.values.toList()
-      ..sort((a, b) {
-        if (a.year != b.year) return b.year.compareTo(a.year);
-        return b.month.compareTo(a.month);
-      });
-    return months;
-  }
+  // ── Build ───────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Analytics'),
-        actions: <Widget>[
-          Consumer<ExpenseProvider>(
-            builder: (context, provider, child) {
-              final months = _monthOptions(provider.expenses);
-              if (months.isEmpty) return const SizedBox.shrink();
-
-              final selectedExists = months.any(
-                (month) =>
-                    month.year == _selectedMonth.year &&
-                    month.month == _selectedMonth.month,
-              );
-              final dropdownValue =
-                  selectedExists ? _selectedMonth : months.first;
-
-              if (!selectedExists) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (!mounted) return;
-                  setState(() {
-                    _selectedMonth = dropdownValue;
-                    _cachedSnapshot = null;
-                  });
-                });
-              }
-
-              return Container(
-                margin: const EdgeInsets.only(right: 16),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<DateTime>(
-                    value: dropdownValue,
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                    dropdownColor: cs.surface,
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    items: months
-                        .map(
-                          (month) => DropdownMenuItem<DateTime>(
-                            value: month,
-                            child: Text(
-                              _analyticsService.formatMonthLabel(month),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() {
-                        _selectedMonth = value;
-                        _cachedSnapshot = null;
-                      });
-                    },
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Analytics')),
       body: Consumer<ExpenseProvider>(
-        builder: (context, provider, child) {
+        builder: (context, provider, _) {
           if (provider.isLoading) {
             return const Center(child: CircularProgressIndicator());
           }
-
-          final snapshot = _snapshotFor(provider.expenses);
 
           if (provider.expenses.isEmpty) {
             return const _AnalyticsEmptyState();
           }
 
-          if (snapshot.isEmpty) {
-            return _AnalyticsEmptyState(
-              message:
-                  'No expenses in ${_analyticsService.formatMonthLabel(snapshot.month)}.',
-            );
-          }
-
-          final breakdownEntries = snapshot.categoryBreakdown.entries.toList()
-            ..sort((a, b) => b.value.compareTo(a.value));
-
-          final pieData = breakdownEntries.asMap().entries.map((entry) {
-            final index = entry.key;
-            final category = entry.value;
-            return PieSliceData(
-              value: category.value,
-              color: _chartColors[index % _chartColors.length],
-              label: category.key,
-            );
-          }).toList();
-
-          final topCategory = snapshot.topCategory;
-          final topCategoryAmount = topCategory == null
-              ? 0.0
-              : snapshot.categoryBreakdown[topCategory] ?? 0;
-          final topCategoryPercent = snapshot.monthlySpending <= 0
-              ? 0
-              : ((topCategoryAmount / snapshot.monthlySpending) * 100).round();
-
-          final highestDay = snapshot.highestSpendingDay;
+          final snapshot = _snapshotFor(provider.expenses);
 
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: <Widget>[
+              // ── Month navigator ───────────────────────────────────────
+              _MonthNavigator(
+                selectedMonth: _selectedMonth,
+                isCurrentMonth: _isCurrentMonth,
+                onPrevious: _goToPreviousMonth,
+                onNext: _goToNextMonth,
+              ),
+              const SizedBox(height: 16),
+
+              // ── Total spending card ───────────────────────────────────
               _CardContainer(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'Total Spending (${_analyticsService.formatMonthLabel(snapshot.month)})',
+                      'Total Spending',
                       style: TextStyle(
                         fontSize: 14,
                         color: cs.onSurface.withValues(alpha: 0.6),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _analyticsService.formatCurrency(snapshot.monthlySpending),
-                      style: TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.w700,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              _CardContainer(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'Category Distribution',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: <Widget>[
-                        AnalyticsPieChart(slices: pieData),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            children: breakdownEntries.asMap().entries.map(
-                              (entry) {
-                                final index = entry.key;
-                                final category = entry.value;
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: _LegendItem(
-                                    color: _chartColors[
-                                        index % _chartColors.length],
-                                    label: category.key,
-                                  ),
-                                );
-                              },
-                            ).toList(),
+                    const SizedBox(height: 6),
+                    snapshot.isEmpty
+                        ? Text(
+                            '₹0.00',
+                            style: TextStyle(
+                              fontSize: 36,
+                              fontWeight: FontWeight.w700,
+                              color: cs.onSurface.withValues(alpha: 0.35),
+                            ),
+                          )
+                        : Text(
+                            _analyticsService
+                                .formatCurrency(snapshot.monthlySpending),
+                            style: TextStyle(
+                              fontSize: 36,
+                              fontWeight: FontWeight.w700,
+                              color: cs.onSurface,
+                            ),
                           ),
+                    if (snapshot.isEmpty) ...<Widget>[
+                      const SizedBox(height: 8),
+                      Text(
+                        'No expenses recorded this month.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: cs.onSurface.withValues(alpha: 0.5),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ],
                 ),
               ),
               const SizedBox(height: 16),
-              _CardContainer(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'Insights',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    if (topCategory != null)
-                      _InsightTile(
-                        text: 'You spent $topCategoryPercent% on $topCategory',
-                      ),
-                    if (topCategory != null) const SizedBox(height: 8),
-                    if (highestDay != null)
-                      _InsightTile(
-                        text:
-                            'Highest spending day: ${_analyticsService.formatDayLabel(highestDay)}',
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Categories',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: cs.onSurface,
-                ),
-              ),
-              const SizedBox(height: 10),
-              ...breakdownEntries.asMap().entries.map((entry) {
-                final index = entry.key;
-                final category = entry.value;
-                final progress = snapshot.monthlySpending <= 0
-                    ? 0.0
-                    : category.value / snapshot.monthlySpending;
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: AnalyticsCategoryTile(
-                    icon: categoryIcon(category.key),
-                    title: category.key,
-                    amount: _analyticsService.formatCurrency(category.value),
-                    progress: progress,
-                    color: _chartColors[index % _chartColors.length],
+              // ── Bar chart (always shown; handles empty internally) ─────
+              // Key forces widget rebuild when month changes so the toggle
+              // resets to Monthly and the cache is cleared.
+              _CardContainer(
+                child: SpendingBarChart(
+                  key: ValueKey<String>(
+                    '${_selectedMonth.year}-${_selectedMonth.month}',
                   ),
-                );
-              }),
+                  expenses: snapshot.monthExpenses,
+                  selectedMonth: _selectedMonth,
+                ),
+              ),
+
+              // ── Everything below only when there is data ──────────────
+              if (!snapshot.isEmpty) ...<Widget>[
+                const SizedBox(height: 16),
+
+                // ── Pie chart ───────────────────────────────────────────
+                _CardContainer(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Category Distribution',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: <Widget>[
+                          AnalyticsPieChart(
+                            slices: _buildPieSlices(snapshot),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              children: snapshot.categoryBreakdown.entries
+                                  .toList()
+                                  .asMap()
+                                  .entries
+                                  .map((e) => Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 8),
+                                        child: _LegendItem(
+                                          color: _chartColors[
+                                              e.key % _chartColors.length],
+                                          label: e.value.key,
+                                        ),
+                                      ))
+                                  .toList(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // ── Insights ────────────────────────────────────────────
+                _buildInsightsCard(snapshot, cs),
+                const SizedBox(height: 16),
+
+                // ── Category tiles ──────────────────────────────────────
+                Text(
+                  'Categories',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ..._buildCategoryTiles(snapshot),
+              ],
             ],
           );
         },
       ),
     );
   }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+
+  List<PieSliceData> _buildPieSlices(AnalyticsSnapshot snapshot) {
+    final entries = snapshot.categoryBreakdown.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return entries.asMap().entries.map((e) {
+      return PieSliceData(
+        value: e.value.value,
+        color: _chartColors[e.key % _chartColors.length],
+        label: e.value.key,
+      );
+    }).toList();
+  }
+
+  Widget _buildInsightsCard(AnalyticsSnapshot snapshot, ColorScheme cs) {
+    final topCategory = snapshot.topCategory;
+    final topCategoryAmount =
+        topCategory == null ? 0.0 : snapshot.categoryBreakdown[topCategory] ?? 0;
+    final topCategoryPercent = snapshot.monthlySpending <= 0
+        ? 0
+        : ((topCategoryAmount / snapshot.monthlySpending) * 100).round();
+    final highestDay = snapshot.highestSpendingDay;
+
+    return _CardContainer(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Insights',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: cs.onSurface,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (topCategory != null)
+            _InsightTile(
+              text: 'You spent $topCategoryPercent% on $topCategory',
+            ),
+          if (topCategory != null && highestDay != null)
+            const SizedBox(height: 8),
+          if (highestDay != null)
+            _InsightTile(
+              text:
+                  'Highest spending day: ${_analyticsService.formatDayLabel(highestDay)}',
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildCategoryTiles(AnalyticsSnapshot snapshot) {
+    final entries = snapshot.categoryBreakdown.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return entries.asMap().entries.map((e) {
+      final progress = snapshot.monthlySpending <= 0
+          ? 0.0
+          : e.value.value / snapshot.monthlySpending;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: AnalyticsCategoryTile(
+          icon: categoryIcon(e.value.key),
+          title: e.value.key,
+          amount: _analyticsService.formatCurrency(e.value.value),
+          progress: progress,
+          color: _chartColors[e.key % _chartColors.length],
+        ),
+      );
+    }).toList();
+  }
 }
 
-class _AnalyticsEmptyState extends StatelessWidget {
-  const _AnalyticsEmptyState({
-    this.message = 'Add expenses to see spending insights.',
+// ─── Month navigator ──────────────────────────────────────────────────────────
+
+class _MonthNavigator extends StatelessWidget {
+  const _MonthNavigator({
+    required this.selectedMonth,
+    required this.isCurrentMonth,
+    required this.onPrevious,
+    required this.onNext,
   });
 
-  final String message;
+  final DateTime selectedMonth;
+  final bool isCurrentMonth;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final label = DateFormat('MMMM yyyy').format(selectedMonth);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          // ── Previous ───────────────────────────────────────────────────
+          _NavButton(
+            icon: Icons.chevron_left_rounded,
+            onTap: onPrevious,
+            enabled: true,
+          ),
+
+          // ── Month label ────────────────────────────────────────────────
+          Expanded(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: cs.onSurface,
+              ),
+            ),
+          ),
+
+          // ── Next (disabled when on current month) ──────────────────────
+          _NavButton(
+            icon: Icons.chevron_right_rounded,
+            onTap: isCurrentMonth ? null : onNext,
+            enabled: !isCurrentMonth,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavButton extends StatelessWidget {
+  const _NavButton({
+    required this.icon,
+    required this.onTap,
+    required this.enabled,
+  });
+
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Icon(
+            icon,
+            size: 24,
+            color: enabled
+                ? cs.onSurface
+                : cs.onSurface.withValues(alpha: 0.25),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Supporting widgets ───────────────────────────────────────────────────────
+
+class _AnalyticsEmptyState extends StatelessWidget {
+  const _AnalyticsEmptyState();
+
+  static const String _message = 'Add expenses to see spending insights.';
 
   @override
   Widget build(BuildContext context) {
@@ -354,7 +467,7 @@ class _AnalyticsEmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              message,
+              _message,
               textAlign: TextAlign.center,
               style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6)),
             ),
@@ -410,12 +523,14 @@ class _LegendItem extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 8),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            color: cs.onSurface.withValues(alpha: 0.8),
-            fontWeight: FontWeight.w500,
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              color: cs.onSurface.withValues(alpha: 0.8),
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ],
