@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "updatedAt": "2026-06-02",
+  "version": 2,
+  "updatedAt": "2026-06-03",
   "includeKeywords": [
     "debited",
     "credited",
@@ -72,5 +72,45 @@
     "\\bto\\s+([A-Za-z0-9@._ ]+?)(?:\\s+via|\\s+@|\\.)",
     "via\\s+UPI\\s+to\\s+([A-Za-z0-9@._ ]+)",
     "UPI\\s+txn\\s+of\\s+(?:INR|Rs\\.?|₹)?\\s?[\\d,.]+\\s+to\\s+([A-Za-z0-9@._ ]+)"
+  ],
+  "subscriptionDetection": {
+    "keywords": [
+      "autopay",
+      "subscription",
+      "recurring",
+      "mandate",
+      "emi",
+      "bill payment",
+      "auto debit",
+      "standing instruction",
+      "nach debit"
+    ],
+    "minMatches": 2,
+    "amountTolerance": 10.0,
+    "dayTolerance": 3
+  },
+  "subscriptionMerchants": [
+    "netflix",
+    "spotify",
+    "youtube",
+    "amazon prime",
+    "hotstar",
+    "disney",
+    "zee5",
+    "sonyliv",
+    "apple music",
+    "google one",
+    "microsoft 365",
+    "dropbox",
+    "adobe",
+    "linkedin",
+    "github"
+  ],
+  "ignoreKeywords": [
+    "salary",
+    "payroll",
+    "self transfer",
+    "neft self",
+    "imps self"
   ]
 }

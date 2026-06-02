@@ -4,6 +4,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../models/expense.dart';
 import '../models/recurring_expense.dart';
+import '../../sms/models/detected_subscription.dart';
 import '../../sms/models/parsed_transaction.dart';
 import '../../sms/utils/sms_expense_mapper.dart';
 import '../services/recurring_debug.dart';
@@ -15,10 +16,11 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const String _databaseName = 'expenses.db';
-  static const int _databaseVersion = 7;
+  static const int _databaseVersion = 8;
   static const String tableExpenses = 'expenses';
   static const String tableRecurringExpenses = 'recurring_expenses';
   static const String tableUserProfile = 'user_profile';
+  static const String tableSubscriptions = 'subscriptions';
 
   Database? _database;
 
@@ -46,6 +48,7 @@ class DatabaseHelper {
     await _createExpensesTable(db);
     await _createRecurringExpensesTable(db);
     await _createUserProfileTable(db);
+    await _createSubscriptionsTable(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -87,6 +90,11 @@ class DatabaseHelper {
 
     if (oldVersion < 7) {
       await _createUserProfileTable(db);
+    }
+
+    if (oldVersion < 8) {
+      await _migrateExpensesSubscriptionColumns(db);
+      await _createSubscriptionsTable(db);
     }
   }
 
@@ -193,13 +201,19 @@ class DatabaseHelper {
         merchant TEXT,
         raw_sms TEXT,
         sms_hash TEXT,
-        transaction_time TEXT
+        transaction_time TEXT,
+        is_subscription INTEGER NOT NULL DEFAULT 0,
+        subscription_id INTEGER
       )
     ''');
     await db.execute('''
       CREATE UNIQUE INDEX IF NOT EXISTS idx_expenses_sms_hash
       ON $tableExpenses(sms_hash)
       WHERE sms_hash IS NOT NULL
+    ''');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_expenses_merchant
+      ON $tableExpenses(merchant)
     ''');
   }
 
@@ -384,8 +398,164 @@ class DatabaseHelper {
     return updated;
   }
 
-  Future<void> _createUserProfileTable(Database db) async {
+  Future<void> _migrateExpensesSubscriptionColumns(Database db) async {
+    final columns = await db.rawQuery('PRAGMA table_info($tableExpenses)');
+    final names = columns.map((row) => row['name'] as String).toSet();
+
+    if (!names.contains('is_subscription')) {
+      await db.execute(
+        'ALTER TABLE $tableExpenses ADD COLUMN is_subscription INTEGER NOT NULL DEFAULT 0',
+      );
+    }
+    if (!names.contains('subscription_id')) {
+      await db.execute(
+        'ALTER TABLE $tableExpenses ADD COLUMN subscription_id INTEGER',
+      );
+    }
+    // Add merchant index for fast subscription lookups.
     await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_expenses_merchant
+      ON $tableExpenses(merchant)
+    ''');
+    debugPrint('[DB] expenses: subscription columns migrated');
+  }
+
+  Future<void> _createSubscriptionsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $tableSubscriptions(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        merchant TEXT NOT NULL,
+        amount REAL NOT NULL,
+        category TEXT NOT NULL,
+        frequency TEXT NOT NULL,
+        last_paid_date TEXT NOT NULL,
+        next_due_date TEXT NOT NULL,
+        confidence_score TEXT NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_merchant
+      ON $tableSubscriptions(merchant)
+    ''');
+    debugPrint('[DB] subscriptions table ready');
+  }
+
+  // ── Subscription CRUD ─────────────────────────────────────────────────────
+
+  /// Inserts a new subscription row and returns its id.
+  Future<int> insertSubscription(DetectedSubscription sub) async {
+    final db = await database;
+    final id = await db.insert(tableSubscriptions, sub.toDbMap());
+    debugPrint('[DB] insertSubscription id=$id merchant=${sub.merchant}');
+    return id;
+  }
+
+  /// Updates an existing subscription (must have a valid id).
+  Future<int> updateSubscription(DetectedSubscription sub) async {
+    if (sub.id == null) throw ArgumentError('Subscription id required');
+    final db = await database;
+    final updated = await db.update(
+      tableSubscriptions,
+      sub.toDbMap(),
+      where: 'id = ?',
+      whereArgs: <Object>[sub.id!],
+    );
+    debugPrint('[DB] updateSubscription id=${sub.id} updated=$updated');
+    return updated;
+  }
+
+  /// Returns the subscription for [merchant], or null if not found.
+  Future<DetectedSubscription?> getSubscriptionByMerchant(
+    String merchant,
+  ) async {
+    final db = await database;
+    final rows = await db.query(
+      tableSubscriptions,
+      where: 'merchant = ?',
+      whereArgs: <Object>[merchant.toUpperCase()],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return DetectedSubscription.fromMap(rows.first);
+  }
+
+  /// All active subscriptions ordered by next_due_date.
+  Future<List<DetectedSubscription>> getAllSubscriptions({
+    bool activeOnly = true,
+  }) async {
+    final db = await database;
+    final rows = await db.query(
+      tableSubscriptions,
+      where: activeOnly ? 'is_active = 1' : null,
+      orderBy: 'next_due_date ASC',
+    );
+    debugPrint('[DB] getAllSubscriptions count=${rows.length}');
+    return rows.map(DetectedSubscription.fromMap).toList();
+  }
+
+  /// Subscriptions whose next_due_date falls within the next [daysAhead] days.
+  Future<List<DetectedSubscription>> getUpcomingSubscriptions({
+    int daysAhead = 7,
+  }) async {
+    final now = DateTime.now();
+    final today = dateOnly(now);
+    final future = today.add(Duration(days: daysAhead));
+    final db = await database;
+    final rows = await db.query(
+      tableSubscriptions,
+      where:
+          'is_active = 1 AND '
+          'date(next_due_date) >= date(?) AND date(next_due_date) <= date(?)',
+      whereArgs: <String>[
+        toIsoDateString(today),
+        toIsoDateString(future),
+      ],
+      orderBy: 'next_due_date ASC',
+    );
+    debugPrint('[DB] getUpcomingSubscriptions count=${rows.length}');
+    return rows.map(DetectedSubscription.fromMap).toList();
+  }
+
+  /// Recent debit expenses for a given merchant — used for pattern detection.
+  /// Capped at [limit] rows, most recent first.
+  Future<List<Map<String, Object?>>> getExpensesByMerchant(
+    String merchant, {
+    int limit = 10,
+  }) async {
+    final db = await database;
+    return db.query(
+      tableExpenses,
+      columns: <String>['id', 'amount', 'transaction_time', 'date'],
+      where: 'merchant = ? AND transaction_type = ?',
+      whereArgs: <Object>[merchant, 'debit'],
+      orderBy: 'COALESCE(transaction_time, date) DESC',
+      limit: limit,
+    );
+  }
+
+  /// Links an expense row to a subscription.
+  Future<void> linkExpenseToSubscription(
+    int expenseId,
+    int subscriptionId,
+  ) async {
+    final db = await database;
+    await db.update(
+      tableExpenses,
+      <String, Object?>{
+        'is_subscription': 1,
+        'subscription_id': subscriptionId,
+      },
+      where: 'id = ?',
+      whereArgs: <Object>[expenseId],
+    );
+    debugPrint(
+      '[DB] linkExpenseToSubscription expenseId=$expenseId subId=$subscriptionId',
+    );
+  }
+
+  Future<void> _createUserProfileTable(Database db) async {    await db.execute('''
       CREATE TABLE IF NOT EXISTS $tableUserProfile(
         id INTEGER PRIMARY KEY,
         name TEXT NOT NULL,

@@ -79,6 +79,28 @@ class SmsParser {
         'Type: $typeResult | Amount: ${amountResult.value} | Merchant: $merchant',
       );
 
+      // ── Subscription detection (Steps 1–4) ───────────────────────────
+      // Step 1: rule-flagged via amountResult (future: per-rule is_subscription)
+      // Step 2: keyword match in SMS body
+      final subConfig = _rules.subscriptionDetection;
+      final isSubKeyword = subConfig.keywords.any(lower.contains);
+
+      // Step 3: normalise merchant (uppercase, trimmed)
+      final normalisedMerchant = merchant.trim().toUpperCase();
+
+      // Step 4: known subscription merchant list
+      final isKnownSubMerchant = _rules.subscriptionMerchants
+          .any(normalisedMerchant.toLowerCase().contains);
+
+      final isSubscription = isSubKeyword || isKnownSubMerchant;
+
+      if (isSubscription) {
+        SmsLogger.parser(
+          '[SUB] Flagged as subscription — '
+          'keyword=$isSubKeyword known=$isKnownSubMerchant',
+        );
+      }
+
       final parsed = ParsedTransaction(
         amount: amountResult.value!,
         type: typeResult,
@@ -92,6 +114,7 @@ class SmsParser {
         rawSms: body,
         account: account,
         balance: balance,
+        isSubscription: isSubscription,
       );
 
       SmsLogger.parser('Parsed Result: ${parsed.toLogMap()}');
