@@ -1,153 +1,76 @@
 {
   "version": 1,
-  "last_updated": "2026-06-02",
-  "rules": [
-    {
-      "id": "hdfc_debit",
-      "sender": ["HDFCBK", "HDFC"],
-      "type": "expense",
-      "match": ["debited", "spent"],
-      "amount_regex": "(?i)(rs\\.?|inr)\\s?([\\d,]+\\.?\\d*)",
-      "merchant_regex": "(?i)at ([A-Za-z0-9\\-\\.\\s]+)",
-      "priority": 1,
-      "active": true
-    },
-    {
-      "id": "hdfc_credit",
-      "sender": ["HDFCBK"],
-      "type": "income",
-      "match": ["credited"],
-      "amount_regex": "(?i)(rs\\.?|inr)\\s?([\\d,]+\\.?\\d*)",
-      "priority": 1,
-      "active": true
-    },
-    {
-      "id": "icici_debit",
-      "sender": ["ICICIB"],
-      "type": "expense",
-      "match": ["debited", "withdrawn"],
-      "amount_regex": "(?i)(rs\\.?|inr)\\s?([\\d,]+\\.?\\d*)",
-      "merchant_regex": "(?i)info: ([A-Za-z0-9\\s\\-\\.]+)",
-      "priority": 1,
-      "active": true
-    },
-    {
-      "id": "icici_credit",
-      "sender": ["ICICIB"],
-      "type": "income",
-      "match": ["credited"],
-      "amount_regex": "(?i)(rs\\.?|inr)\\s?([\\d,]+\\.?\\d*)",
-      "priority": 1,
-      "active": true
-    },
-    {
-      "id": "sbi_debit",
-      "sender": ["SBIINB", "SBIPSG"],
-      "type": "expense",
-      "match": ["debited", "txn of"],
-      "amount_regex": "(?i)(rs\\.?|inr)\\s?([\\d,]+\\.?\\d*)",
-      "merchant_regex": "(?i)at ([A-Za-z0-9\\s\\-\\.]+)",
-      "priority": 1,
-      "active": true
-    },
-    {
-      "id": "sbi_credit",
-      "sender": ["SBIINB"],
-      "type": "income",
-      "match": ["credited"],
-      "amount_regex": "(?i)(rs\\.?|inr)\\s?([\\d,]+\\.?\\d*)",
-      "priority": 1,
-      "active": true
-    },
-    {
-      "id": "axis_debit",
-      "sender": ["AXISBK"],
-      "type": "expense",
-      "match": ["debited"],
-      "amount_regex": "(?i)(rs\\.?|inr)\\s?([\\d,]+\\.?\\d*)",
-      "merchant_regex": "(?i)at ([A-Za-z0-9\\s\\-\\.]+)",
-      "priority": 1,
-      "active": true
-    },
-    {
-      "id": "kotak_debit",
-      "sender": ["KOTAKB"],
-      "type": "expense",
-      "match": ["debited"],
-      "amount_regex": "(?i)(rs\\.?|inr)\\s?([\\d,]+\\.?\\d*)",
-      "merchant_regex": "(?i)to ([A-Za-z0-9\\s\\-\\.]+)",
-      "priority": 1,
-      "active": true
-    },
-    {
-      "id": "upi_debit",
-      "sender": ["VK-UPI", "VM-UPI", "AX-UPI", "IC-UPI"],
-      "type": "expense",
-      "match": ["paid", "sent", "debited"],
-      "amount_regex": "(?i)(rs\\.?|inr)\\s?([\\d,]+\\.?\\d*)",
-      "merchant_regex": "(?i)to ([A-Za-z0-9@\\.\\s]+)",
-      "priority": 1,
-      "active": true
-    },
-    {
-      "id": "upi_credit",
-      "sender": ["VK-UPI", "VM-UPI", "AX-UPI"],
-      "type": "income",
-      "match": ["received", "credited"],
-      "amount_regex": "(?i)(rs\\.?|inr)\\s?([\\d,]+\\.?\\d*)",
-      "merchant_regex": "(?i)from ([A-Za-z0-9@\\.\\s]+)",
-      "priority": 1,
-      "active": true
-    },
-    {
-      "id": "gpay_paid",
-      "sender": ["GPAY", "GPay"],
-      "type": "expense",
-      "match": ["paid"],
-      "amount_regex": "(?i)₹\\s?([\\d,]+\\.?\\d*)",
-      "merchant_regex": "(?i)to ([A-Za-z0-9\\s@\\.]+)",
-      "priority": 2,
-      "active": true
-    },
-    {
-      "id": "phonepe_paid",
-      "sender": ["PHONEPE"],
-      "type": "expense",
-      "match": ["paid"],
-      "amount_regex": "(?i)₹\\s?([\\d,]+\\.?\\d*)",
-      "merchant_regex": "(?i)to ([A-Za-z0-9\\s@\\.]+)",
-      "priority": 2,
-      "active": true
-    },
-    {
-      "id": "paytm_paid",
-      "sender": ["PAYTM"],
-      "type": "expense",
-      "match": ["paid", "sent"],
-      "amount_regex": "(?i)₹\\s?([\\d,]+\\.?\\d*)",
-      "merchant_regex": "(?i)to ([A-Za-z0-9\\s@\\.]+)",
-      "priority": 2,
-      "active": true
-    }
-
+  "updatedAt": "2026-06-02",
+  "includeKeywords": [
+    "debited",
+    "credited",
+    "spent",
+    "withdrawn",
+    "paid"
   ],
-
-  "merchant_map": {
-    "AMZN": "Amazon",
-    "AMAZON PAY": "Amazon",
-    "FLIPKART INTERNET": "Flipkart",
-    "ZOMATO": "Zomato",
-    "SWIGGY": "Swiggy",
-    "UBER": "Uber",
-    "OLA": "Ola"
+  "excludeKeywords": [
+    "otp",
+    "one time password",
+    "verification code",
+    "do not share",
+    "offer",
+    "cashback offer",
+    "pre-approved",
+    "loan offer",
+    "click here",
+    "unsubscribe",
+    "balance is",
+    "available balance",
+    "avl bal",
+    "a/c bal",
+    "account balance",
+    "mini statement"
+  ],
+  "categoryKeywords": {
+    "swiggy": "Food",
+    "zomato": "Food",
+    "dominos": "Food",
+    "amazon": "Shopping",
+    "flipkart": "Shopping",
+    "myntra": "Shopping",
+    "uber": "Travel",
+    "ola": "Travel",
+    "netflix": "Entertainment",
+    "hotstar": "Entertainment",
+    "spotify": "Entertainment",
+    "youtube": "Entertainment",
+    "bigbasket": "Groceries",
+    "grofers": "Groceries",
+    "blinkit": "Groceries",
+    "dunzo": "Groceries",
+    "rapido": "Travel",
+    "redbus": "Travel",
+    "irctc": "Travel",
+    "makemytrip": "Travel",
+    "goibibo": "Travel",
+    "phonepe": "Others",
+    "paytm": "Others",
+    "gpay": "Others",
+    "googlepay": "Others"
   },
-
-  "category_map": {
-    "Amazon": "Shopping",
-    "Flipkart": "Shopping",
-    "Zomato": "Food",
-    "Swiggy": "Food",
-    "Uber": "Travel",
-    "Ola": "Travel"
-  }
+  "debitPatterns": [
+    "(?:INR|Rs\\.?|₹)\\s?([\\d,]+(?:\\.\\d{1,2})?)\\s+debited",
+    "spent\\s+(?:INR|Rs\\.?|₹)\\s?([\\d,]+(?:\\.\\d{1,2})?)",
+    "(?:INR|Rs\\.?|₹)\\s?([\\d,]+(?:\\.\\d{1,2})?)\\s+paid",
+    "paid\\s+(?:INR|Rs\\.?|₹)\\s?([\\d,]+(?:\\.\\d{1,2})?)",
+    "(?:INR|Rs\\.?|₹)\\s?([\\d,]+(?:\\.\\d{1,2})?)\\s+withdrawn"
+  ],
+  "creditPatterns": [
+    "(?:INR|Rs\\.?|₹)\\s?([\\d,]+(?:\\.\\d{1,2})?)\\s+credited",
+    "received\\s+(?:INR|Rs\\.?|₹)\\s?([\\d,]+(?:\\.\\d{1,2})?)",
+    "(?:INR|Rs\\.?|₹)\\s?([\\d,]+(?:\\.\\d{1,2})?)\\s+received"
+  ],
+  "merchantPatterns": [
+    "Info:\\s*([A-Za-z0-9@._ ]+)",
+    "\\bat\\s+([A-Za-z0-9@._]+)(?:\\s+on|\\s+via|\\.)",
+    "(?:INR|Rs\\.?|₹)\\s?[\\d,.]+\\s+paid\\s+to\\s+([A-Za-z0-9@._ ]+)",
+    "\\bto\\s+([A-Za-z0-9@._ ]+?)(?:\\s+via|\\s+@|\\.)",
+    "via\\s+UPI\\s+to\\s+([A-Za-z0-9@._ ]+)",
+    "UPI\\s+txn\\s+of\\s+(?:INR|Rs\\.?|₹)?\\s?[\\d,.]+\\s+to\\s+([A-Za-z0-9@._ ]+)"
+  ]
 }

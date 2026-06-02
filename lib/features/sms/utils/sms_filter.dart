@@ -1,7 +1,17 @@
+import '../models/sms_rule_file.dart';
 import 'sms_logger.dart';
 
-/// Returns null when SMS should be skipped; logs the reason via [SmsLogger].
-bool isRelevantTransactionSms(String body, {bool logRejections = true}) {
+/// Returns true when an SMS body looks like a financial transaction.
+///
+/// When [rules] is supplied the include/exclude keyword lists from the rule
+/// file are used; otherwise the hardcoded fallback lists are used.
+/// This ensures the filter always works — even before [SmsRuleRepository]
+/// has finished loading.
+bool isRelevantTransactionSms(
+  String body, {
+  SmsRuleFile? rules,
+  bool logRejections = true,
+}) {
   final lower = body.toLowerCase().trim();
   if (lower.isEmpty) {
     if (logRejections) {
@@ -10,7 +20,10 @@ bool isRelevantTransactionSms(String body, {bool logRejections = true}) {
     return false;
   }
 
-  for (final keyword in smsExcludeKeywords) {
+  final excludeList = rules?.excludeKeywords ?? smsExcludeKeywords;
+  final includeList = rules?.includeKeywords ?? smsIncludeKeywords;
+
+  for (final keyword in excludeList) {
     if (lower.contains(keyword)) {
       if (logRejections) {
         SmsLogger.parser(
@@ -21,12 +34,12 @@ bool isRelevantTransactionSms(String body, {bool logRejections = true}) {
     }
   }
 
-  final hasInclude = smsIncludeKeywords.any(lower.contains);
+  final hasInclude = includeList.any(lower.contains);
   if (!hasInclude) {
     if (logRejections) {
       SmsLogger.parser(
         'No transaction detected — missing transaction keyword '
-        '(debited/credited/spent/withdrawn/paid)',
+        '(${includeList.join("/")})',
       );
     }
     return false;
@@ -34,6 +47,8 @@ bool isRelevantTransactionSms(String body, {bool logRejections = true}) {
 
   return true;
 }
+
+// ── Hardcoded fallback lists (used when rules have not loaded yet) ────────────
 
 const List<String> smsIncludeKeywords = <String>[
   'debited',

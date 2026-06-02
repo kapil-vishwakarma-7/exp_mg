@@ -1,49 +1,27 @@
 import '../models/parsed_transaction.dart';
 import '../models/sms_message.dart';
+import '../models/sms_rule_file.dart';
 import '../utils/sms_category_detector.dart';
 import '../utils/sms_date_time_parser.dart';
 import '../utils/sms_filter.dart';
 import '../utils/sms_logger.dart';
+import 'sms_rule_repository.dart';
 
 /// India-focused bank/UPI SMS parser.
+///
+/// Regex patterns and keyword lists are driven by [SmsRuleFile] loaded from
+/// [SmsRuleRepository].  The parser automatically picks up updated rules
+/// whenever [SmsRuleRepository] swaps them in — no restart required.
 class SmsParser {
-  static final List<RegExp> _debitAmountPatterns = <RegExp>[
-    RegExp(
-      r'(?:INR|Rs\.?|₹)\s?([\d,]+(?:\.\d{1,2})?)\s+debited',
-      caseSensitive: false,
-    ),
-    RegExp(
-      r'spent\s+(?:INR|Rs\.?|₹)\s?([\d,]+(?:\.\d{1,2})?)',
-      caseSensitive: false,
-    ),
-    RegExp(
-      r'(?:INR|Rs\.?|₹)\s?([\d,]+(?:\.\d{1,2})?)\s+paid',
-      caseSensitive: false,
-    ),
-    RegExp(
-      r'paid\s+(?:INR|Rs\.?|₹)\s?([\d,]+(?:\.\d{1,2})?)',
-      caseSensitive: false,
-    ),
-    RegExp(
-      r'(?:INR|Rs\.?|₹)\s?([\d,]+(?:\.\d{1,2})?)\s+withdrawn',
-      caseSensitive: false,
-    ),
-  ];
+  SmsParser({SmsRuleRepository? repository})
+      : _repo = repository ?? SmsRuleRepository.instance;
 
-  static final List<RegExp> _creditAmountPatterns = <RegExp>[
-    RegExp(
-      r'(?:INR|Rs\.?|₹)\s?([\d,]+(?:\.\d{1,2})?)\s+credited',
-      caseSensitive: false,
-    ),
-    RegExp(
-      r'received\s+(?:INR|Rs\.?|₹)\s?([\d,]+(?:\.\d{1,2})?)',
-      caseSensitive: false,
-    ),
-    RegExp(
-      r'(?:INR|Rs\.?|₹)\s?([\d,]+(?:\.\d{1,2})?)\s+received',
-      caseSensitive: false,
-    ),
-  ];
+  final SmsRuleRepository _repo;
+
+  /// Convenience getter — always returns the current live rules.
+  SmsRuleFile get _rules => _repo.rules;
+
+  // ── Static fallback patterns (used only if rules have no patterns) ────────
 
   static final RegExp _genericAmount = RegExp(
     r'(?:INR|Rs\.?|₹)\s?([\d,]+(?:\.\d{1,2})?)',
@@ -60,32 +38,14 @@ class SmsParser {
     caseSensitive: false,
   );
 
-  static final List<RegExp> _merchantPatterns = <RegExp>[
-    RegExp(r'Info:\s*([A-Za-z0-9@._ ]+)', caseSensitive: false),
-    RegExp(
-      r'\bat\s+([A-Za-z0-9@._]+)(?:\s+on|\s+via|\.)',
-      caseSensitive: false,
-    ),
-    RegExp(
-      r'(?:INR|Rs\.?|₹)\s?[\d,.]+\s+paid\s+to\s+([A-Za-z0-9@._ ]+)',
-      caseSensitive: false,
-    ),
-    RegExp(
-      r'\bto\s+([A-Za-z0-9@._ ]+?)(?:\s+via|\s+@|\.)',
-      caseSensitive: false,
-    ),
-    RegExp(r'via\s+UPI\s+to\s+([A-Za-z0-9@._ ]+)', caseSensitive: false),
-    RegExp(
-      r'UPI\s+txn\s+of\s+(?:INR|Rs\.?|₹)?\s?[\d,.]+\s+to\s+([A-Za-z0-9@._ ]+)',
-      caseSensitive: false,
-    ),
-  ];
+  // ── Public API ────────────────────────────────────────────────────────────
 
   ParsedTransaction? parse(SmsMessage sms) {
     SmsLogger.parser('Parsing SMS: ${sms.body}');
 
     try {
-      if (!isRelevantTransactionSms(sms.body)) return null;
+      // Filter uses live rules from the repository.
+      if (!isRelevantTransactionSms(sms.body, rules: _rules)) return null;
 
       final body = sms.body.trim();
       final lower = body.toLowerCase();
@@ -96,12 +56,15 @@ class SmsParser {
         return null;
       }
 
-      final typeResult = amountResult.type ?? _inferTypeFromKeywords(lower);
+      final typeResult =
+          amountResult.type ?? _inferTypeFromKeywords(lower);
       if (typeResult == null) {
         SmsLogger.parser('No transaction detected — type unknown');
         return null;
       }
-      SmsLogger.parser('Matched $typeResult pattern: ${amountResult.patternName}');
+      SmsLogger.parser(
+        'Matched $typeResult pattern: ${amountResult.patternName}',
+      );
 
       final merchant = _extractMerchant(body, lower);
       final account = _extractAccount(body);
@@ -120,7 +83,11 @@ class SmsParser {
         amount: amountResult.value!,
         type: typeResult,
         merchant: merchant,
-        category: detectSmsCategory(merchant, messageBody: body),
+        category: detectSmsCategory(
+          merchant,
+          messageBody: body,
+          rules: _rules,
+        ),
         transactionTime: transactionTime,
         rawSms: body,
         account: account,
@@ -136,25 +103,38 @@ class SmsParser {
     }
   }
 
+  // ── Amount extraction ─────────────────────────────────────────────────────
+
   _AmountResult _extractAmount(String body, String lower) {
-    for (var i = 0; i < _creditAmountPatterns.length; i++) {
-      final match = _creditAmountPatterns[i].firstMatch(body);
+    final creditPatterns = _rules.compiledCreditPatterns;
+    for (var i = 0; i < creditPatterns.length; i++) {
+      final match = creditPatterns[i].firstMatch(body);
       if (match == null) continue;
       final value = _parseAmountGroup(match.group(1));
       if (value != null) {
-        return _AmountResult(value: value, type: 'credit', patternName: 'credit_$i');
+        return _AmountResult(
+          value: value,
+          type: 'credit',
+          patternName: 'credit_$i',
+        );
       }
     }
 
-    for (var i = 0; i < _debitAmountPatterns.length; i++) {
-      final match = _debitAmountPatterns[i].firstMatch(body);
+    final debitPatterns = _rules.compiledDebitPatterns;
+    for (var i = 0; i < debitPatterns.length; i++) {
+      final match = debitPatterns[i].firstMatch(body);
       if (match == null) continue;
       final value = _parseAmountGroup(match.group(1));
       if (value != null) {
-        return _AmountResult(value: value, type: 'debit', patternName: 'debit_$i');
+        return _AmountResult(
+          value: value,
+          type: 'debit',
+          patternName: 'debit_$i',
+        );
       }
     }
 
+    // Generic fallback — any currency amount in the message.
     final generic = _genericAmount.firstMatch(body);
     if (generic != null) {
       final value = _parseAmountGroup(generic.group(1));
@@ -170,10 +150,24 @@ class SmsParser {
   }
 
   String? _inferTypeFromKeywords(String lower) {
-    const debitWords = <String>['debited', 'spent', 'withdrawn', 'paid'];
-    const creditWords = <String>['credited', 'received'];
-    final hasDebit = debitWords.any(lower.contains);
-    final hasCredit = creditWords.any(lower.contains);
+    // Use live rules so new debit/credit keywords work without code changes.
+    final debitWords = _rules.includeKeywords
+        .where((k) => const ['debited', 'spent', 'withdrawn', 'paid'].contains(k))
+        .toList();
+    final creditWords = _rules.includeKeywords
+        .where((k) => const ['credited', 'received'].contains(k))
+        .toList();
+
+    // Fall back to hardcoded sets if rules don't include them (safe guard).
+    final effectiveDebit = debitWords.isEmpty
+        ? const <String>['debited', 'spent', 'withdrawn', 'paid']
+        : debitWords;
+    final effectiveCredit =
+        creditWords.isEmpty ? const <String>['credited', 'received'] : creditWords;
+
+    final hasDebit = effectiveDebit.any(lower.contains);
+    final hasCredit = effectiveCredit.any(lower.contains);
+
     if (hasCredit && !hasDebit) return 'credit';
     if (hasDebit) return 'debit';
     if (hasCredit) return 'credit';
@@ -185,15 +179,18 @@ class SmsParser {
     return double.tryParse(raw.replaceAll(',', '').trim());
   }
 
-  String? _extractAccount(String body) {
-    return _accountPattern.firstMatch(body)?.group(1);
-  }
+  // ── Account & balance extraction (static patterns — rarely change) ────────
+
+  String? _extractAccount(String body) =>
+      _accountPattern.firstMatch(body)?.group(1);
 
   double? _extractBalance(String body) {
     final match = _balancePattern.firstMatch(body);
     if (match == null) return null;
     return _parseAmountGroup(match.group(1));
   }
+
+  // ── Merchant extraction ───────────────────────────────────────────────────
 
   String _extractMerchant(String body, String lower) {
     if (lower.contains('upi') ||
@@ -204,8 +201,9 @@ class SmsParser {
       SmsLogger.parser('UPI transaction detected');
     }
 
-    for (var i = 0; i < _merchantPatterns.length; i++) {
-      final match = _merchantPatterns[i].firstMatch(body);
+    final patterns = _rules.compiledMerchantPatterns;
+    for (var i = 0; i < patterns.length; i++) {
+      final match = patterns[i].firstMatch(body);
       if (match == null) continue;
       final merchant = _cleanMerchant(match.group(1) ?? '');
       if (merchant != 'Unknown') {
@@ -236,6 +234,8 @@ class SmsParser {
     return cleaned.isEmpty ? 'Unknown' : cleaned;
   }
 }
+
+// ── Internal result type ──────────────────────────────────────────────────────
 
 class _AmountResult {
   const _AmountResult({this.value, this.type, this.patternName});

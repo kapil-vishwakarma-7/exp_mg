@@ -9,10 +9,15 @@ import 'features/expenses/presentation/screens/home_screen.dart';
 import 'features/sms/providers/sms_tracking_provider.dart';
 import 'features/sms/services/sms_debug_bootstrap.dart';
 import 'features/sms/services/sms_incoming_handler.dart';
+import 'features/sms/services/sms_rule_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   debugPrint('DB path: ${await getDatabasesPath()}');
+
+  // Load SMS rules (cache → asset) before the first parse can happen.
+  // The subsequent remote sync runs in the background and does not block startup.
+  await SmsRuleRepository.instance.initialize();
 
   await bootstrapSmsDebugListener();
 
