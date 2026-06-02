@@ -1,45 +1,52 @@
 plugins {
-    id("com.android.application")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
-    id("dev.flutter.flutter-gradle-plugin")
+id("com.android.application")
+id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
-    namespace = "com.example.expense_tracker"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+namespace = "com.example.expense_tracker"
+compileSdk = flutter.compileSdkVersion
+ndkVersion = flutter.ndkVersion
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
+compileOptions {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
 
-    defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.expense_tracker"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
-    }
+defaultConfig {
+    applicationId = "com.example.expense_tracker"
+    minSdk = flutter.minSdkVersion
+    targetSdk = 34
+    versionCode = flutter.versionCode
+    versionName = flutter.versionName
+}
 
-    buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
-        }
+signingConfigs {
+    create("release") {
+        storeFile = file("upload-keystore.jks")
+        storePassword = "kapilv"
+        keyAlias = "upload"
+        keyPassword = "kapilv"
     }
+}
+
+buildTypes {
+    getByName("release") {
+        signingConfig = signingConfigs.getByName("release")
+        isMinifyEnabled = false
+        isShrinkResources = false
+    }
+}
+
+
 }
 
 kotlin {
-    compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
-    }
+compilerOptions {
+jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+}
 }
 
 flutter {
-    source = "../.."
+source = "../.."
 }
