@@ -4,6 +4,7 @@ import '../models/expense.dart';
 import '../models/recurring_data.dart';
 import '../models/recurring_expense.dart';
 import '../services/expense_service.dart';
+import '../../sms/models/detected_subscription.dart';
 
 class ExpenseProvider extends ChangeNotifier {
   ExpenseProvider({ExpenseService? service})
@@ -12,6 +13,7 @@ class ExpenseProvider extends ChangeNotifier {
   final ExpenseService _service;
   final List<Expense> _expenses = <Expense>[];
   List<RecurringExpense> _upcomingPayments = <RecurringExpense>[];
+  List<DetectedSubscription> _subscriptions = <DetectedSubscription>[];
 
   bool _isLoading = false;
   bool _initialized = false;
@@ -20,6 +22,8 @@ class ExpenseProvider extends ChangeNotifier {
   List<Expense> get expenses => List<Expense>.unmodifiable(_expenses);
   List<RecurringExpense> get upcomingPayments =>
       List<RecurringExpense>.unmodifiable(_upcomingPayments);
+  List<DetectedSubscription> get subscriptions =>
+      List<DetectedSubscription>.unmodifiable(_subscriptions);
   bool get isLoading => _isLoading;
   int get refreshVersion => _refreshVersion;
   double get totalAmount => _expenses
@@ -47,6 +51,7 @@ class ExpenseProvider extends ChangeNotifier {
         ..addAll(items);
 
       await _fetchUpcomingPayments();
+      await _fetchSubscriptions();
 
       _refreshVersion++;
       debugPrint('[Provider] fetchExpenses count=${_expenses.length}');
@@ -71,6 +76,17 @@ class ExpenseProvider extends ChangeNotifier {
     debugPrint(
       '[Provider] upcomingPayments count=${_upcomingPayments.length}',
     );
+  }
+
+  Future<void> _fetchSubscriptions() async {
+    _subscriptions = await _service.getAllSubscriptions();
+    debugPrint('[Provider] subscriptions count=${_subscriptions.length}');
+  }
+
+  Future<List<DetectedSubscription>> loadUpcomingSubscriptions({
+    int daysAhead = 7,
+  }) {
+    return _service.getUpcomingSubscriptions(daysAhead: daysAhead);
   }
 
   Future<bool> addExpense({

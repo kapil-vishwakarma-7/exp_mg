@@ -12,6 +12,9 @@ class Expense {
     this.merchant,
     this.rawSms,
     this.smsHash,
+    this.isSubscription = false,
+    this.subscriptionId,
+    this.subscriptionFrequency,
   })  : createdAt = createdAt ?? date,
         transactionTime = transactionTime ?? date;
 
@@ -27,6 +30,15 @@ class Expense {
   final String? merchant;
   final String? rawSms;
   final String? smsHash;
+
+  /// True when this expense has been identified as a recurring/subscription payment.
+  final bool isSubscription;
+
+  /// FK into the subscriptions table (null for non-subscription expenses).
+  final int? subscriptionId;
+
+  /// Frequency string from the linked subscription ('monthly', 'weekly', …).
+  final String? subscriptionFrequency;
 
   bool get isDebit => transactionType == null || transactionType == 'debit';
   bool get isCredit => transactionType == 'credit';
@@ -44,6 +56,9 @@ class Expense {
     String? merchant,
     String? rawSms,
     String? smsHash,
+    bool? isSubscription,
+    int? subscriptionId,
+    String? subscriptionFrequency,
   }) {
     return Expense(
       id: id ?? this.id,
@@ -58,6 +73,10 @@ class Expense {
       merchant: merchant ?? this.merchant,
       rawSms: rawSms ?? this.rawSms,
       smsHash: smsHash ?? this.smsHash,
+      isSubscription: isSubscription ?? this.isSubscription,
+      subscriptionId: subscriptionId ?? this.subscriptionId,
+      subscriptionFrequency:
+          subscriptionFrequency ?? this.subscriptionFrequency,
     );
   }
 
@@ -75,6 +94,8 @@ class Expense {
       'merchant': merchant,
       'raw_sms': rawSms,
       'sms_hash': smsHash,
+      'is_subscription': isSubscription ? 1 : 0,
+      'subscription_id': subscriptionId,
     };
   }
 
@@ -98,6 +119,9 @@ class Expense {
       merchant: map['merchant'] as String?,
       rawSms: map['raw_sms'] as String?,
       smsHash: map['sms_hash'] as String?,
+      isSubscription: (map['is_subscription'] as int? ?? 0) == 1,
+      subscriptionId: map['subscription_id'] as int?,
+      // subscriptionFrequency is joined separately when needed.
     );
   }
 }

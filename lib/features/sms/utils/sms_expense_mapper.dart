@@ -19,5 +19,7 @@ Expense parsedTransactionToExpense(ParsedTransaction parsed) {
     rawSms: parsed.rawSms,
     smsHash: parsed.dedupeKey,
     createdAt: DateTime.now(),
+    isSubscription: parsed.isSubscription,
+    subscriptionId: parsed.subscriptionId,
   );
 }

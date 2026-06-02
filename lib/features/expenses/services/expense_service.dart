@@ -6,6 +6,7 @@ import '../models/recurring_data.dart';
 import '../models/recurring_expense.dart';
 import '../services/recurring_debug.dart';
 import '../utils/recurring_date_utils.dart';
+import '../../sms/models/detected_subscription.dart';
 import 'recurring_expense_service.dart';
 
 class ExpenseService {
@@ -89,5 +90,15 @@ class ExpenseService {
   Future<int> updateExpense(Expense expense) async {
     debugPrint('[Service] updateExpense id=${expense.id}');
     return _databaseHelper.updateExpense(expense);
+  }
+
+  Future<List<DetectedSubscription>> getAllSubscriptions() {
+    return _databaseHelper.getAllSubscriptions();
+  }
+
+  Future<List<DetectedSubscription>> getUpcomingSubscriptions({
+    int daysAhead = 7,
+  }) {
+    return _databaseHelper.getUpcomingSubscriptions(daysAhead: daysAhead);
   }
 }
