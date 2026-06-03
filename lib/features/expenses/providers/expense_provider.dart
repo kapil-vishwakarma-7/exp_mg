@@ -113,6 +113,41 @@ class ExpenseProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> updateExpense(Expense expense) async {
+    try {
+      await _service.updateExpense(expense);
+      debugPrint('[Provider] updateExpense id=${expense.id}');
+      // Update in-memory list immediately for instant UI feedback.
+      final idx = _expenses.indexWhere((e) => e.id == expense.id);
+      if (idx != -1) {
+        _expenses[idx] = expense;
+        _refreshVersion++;
+        notifyListeners();
+      } else {
+        await fetchExpenses();
+      }
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint('[Provider] updateExpense failed: $error');
+      debugPrint('$stackTrace');
+      return false;
+    }
+  }
+
+  /// Re-inserts a previously deleted expense (undo delete).
+  Future<void> restoreExpense(Expense expense) async {
+    try {
+      // Strip the id so DB assigns a new one on insert.
+      final restored = expense.copyWith(id: null);
+      await _service.insertExpense(restored);
+      debugPrint('[Provider] restoreExpense title=${expense.title}');
+      await fetchExpenses();
+    } catch (error, stackTrace) {
+      debugPrint('[Provider] restoreExpense failed: $error');
+      debugPrint('$stackTrace');
+    }
+  }
+
   Future<void> deleteExpense(int id) async {
     try {
       await _service.deleteExpense(id);
