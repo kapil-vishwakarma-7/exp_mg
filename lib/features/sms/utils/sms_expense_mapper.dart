@@ -21,5 +21,7 @@ Expense parsedTransactionToExpense(ParsedTransaction parsed) {
     createdAt: DateTime.now(),
     isSubscription: parsed.isSubscription,
     subscriptionId: parsed.subscriptionId,
+    confirmationStatus: parsed.confirmationStatus,
+    confidenceScore: parsed.confidenceScore,
   );
 }

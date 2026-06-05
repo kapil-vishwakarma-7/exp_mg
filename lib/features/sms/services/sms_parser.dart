@@ -5,6 +5,7 @@ import '../utils/sms_category_detector.dart';
 import '../utils/sms_date_time_parser.dart';
 import '../utils/sms_filter.dart';
 import '../utils/sms_logger.dart';
+import '../../expenses/models/expense.dart' show ConfirmationStatus, ConfidenceScore;
 import 'sms_rule_repository.dart';
 
 /// India-focused bank/UPI SMS parser.
@@ -101,6 +102,38 @@ class SmsParser {
         );
       }
 
+      // ── Confidence score ──────────────────────────────────────────────
+      // high   : named pattern matched + known merchant/subscription
+      // medium : named pattern matched (debit/credit specific)
+      // low    : generic fallback pattern used
+      final String confidence;
+      if (amountResult.patternName != 'generic' &&
+          (isKnownSubMerchant ||
+              _rules.categoryKeywords.containsKey(merchant.toLowerCase()))) {
+        confidence = ConfidenceScore.high;
+      } else if (amountResult.patternName != 'generic') {
+        confidence = ConfidenceScore.medium;
+      } else {
+        confidence = ConfidenceScore.low;
+      }
+
+      // ── Confirmation status ───────────────────────────────────────────
+      // Confirmed immediately when:  high confidence  OR  merchant is trusted
+      // Otherwise goes to pending review.
+      // Trust check is async — fire-and-forget; default to pending for safety.
+      // The ConfirmationService will auto-confirm after trust lookup.
+      final String confirmStatus;
+      if (confidence == ConfidenceScore.high) {
+        confirmStatus = ConfirmationStatus.confirmed;
+      } else {
+        // Will be upgraded to confirmed by ConfirmationService if trusted.
+        confirmStatus = ConfirmationStatus.pending;
+      }
+
+      SmsLogger.parser(
+        '[CONFIRM] confidence=$confidence status=$confirmStatus',
+      );
+
       final parsed = ParsedTransaction(
         amount: amountResult.value!,
         type: typeResult,
@@ -115,6 +148,8 @@ class SmsParser {
         account: account,
         balance: balance,
         isSubscription: isSubscription,
+        confidenceScore: confidence,
+        confirmationStatus: confirmStatus,
       );
 
       SmsLogger.parser('Parsed Result: ${parsed.toLogMap()}');

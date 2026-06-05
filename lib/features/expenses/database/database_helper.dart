@@ -3,6 +3,7 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../models/expense.dart';
+import '../models/merchant_preference.dart';
 import '../models/recurring_expense.dart';
 import '../../sms/models/detected_subscription.dart';
 import '../../sms/models/parsed_transaction.dart';
@@ -16,11 +17,12 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const String _databaseName = 'expenses.db';
-  static const int _databaseVersion = 8;
+  static const int _databaseVersion = 9;
   static const String tableExpenses = 'expenses';
   static const String tableRecurringExpenses = 'recurring_expenses';
   static const String tableUserProfile = 'user_profile';
   static const String tableSubscriptions = 'subscriptions';
+  static const String tableMerchantPreferences = 'merchant_preferences';
 
   Database? _database;
 
@@ -49,6 +51,7 @@ class DatabaseHelper {
     await _createRecurringExpensesTable(db);
     await _createUserProfileTable(db);
     await _createSubscriptionsTable(db);
+    await _createMerchantPreferencesTable(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -95,6 +98,11 @@ class DatabaseHelper {
     if (oldVersion < 8) {
       await _migrateExpensesSubscriptionColumns(db);
       await _createSubscriptionsTable(db);
+    }
+
+    if (oldVersion < 9) {
+      await _migrateExpensesConfirmationColumns(db);
+      await _createMerchantPreferencesTable(db);
     }
   }
 
@@ -203,7 +211,9 @@ class DatabaseHelper {
         sms_hash TEXT,
         transaction_time TEXT,
         is_subscription INTEGER NOT NULL DEFAULT 0,
-        subscription_id INTEGER
+        subscription_id INTEGER,
+        confirmation_status TEXT NOT NULL DEFAULT 'confirmed',
+        confidence_score TEXT NOT NULL DEFAULT 'medium'
       )
     ''');
     await db.execute('''
@@ -214,6 +224,10 @@ class DatabaseHelper {
     await db.execute('''
       CREATE INDEX IF NOT EXISTS idx_expenses_merchant
       ON $tableExpenses(merchant)
+    ''');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_expenses_confirmation
+      ON $tableExpenses(confirmation_status)
     ''');
   }
 
@@ -602,4 +616,135 @@ class DatabaseHelper {
   }
 
   Future<void> logDebugDashboard() => logRecurringDebugDashboard(this);
+
+  // ── Confirmation migration ─────────────────────────────────────────────────
+
+  Future<void> _migrateExpensesConfirmationColumns(Database db) async {
+    final columns = await db.rawQuery('PRAGMA table_info($tableExpenses)');
+    final names = columns.map((row) => row['name'] as String).toSet();
+
+    if (!names.contains('confirmation_status')) {
+      await db.execute(
+        "ALTER TABLE $tableExpenses "
+        "ADD COLUMN confirmation_status TEXT NOT NULL DEFAULT 'confirmed'",
+      );
+      // Existing rows are already trusted — mark all confirmed.
+      await db.execute(
+        "UPDATE $tableExpenses SET confirmation_status = 'confirmed'",
+      );
+    }
+    if (!names.contains('confidence_score')) {
+      await db.execute(
+        "ALTER TABLE $tableExpenses "
+        "ADD COLUMN confidence_score TEXT NOT NULL DEFAULT 'medium'",
+      );
+    }
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_expenses_confirmation
+      ON $tableExpenses(confirmation_status)
+    ''');
+    debugPrint('[DB] expenses: confirmation columns migrated');
+  }
+
+  // ── Merchant preferences table ────────────────────────────────────────────
+
+  Future<void> _createMerchantPreferencesTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $tableMerchantPreferences(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        merchant TEXT NOT NULL UNIQUE,
+        is_trusted INTEGER NOT NULL DEFAULT 0,
+        last_confirmed_at TEXT NOT NULL
+      )
+    ''');
+    debugPrint('[DB] merchant_preferences table ready');
+  }
+
+  // ── Merchant preference CRUD ──────────────────────────────────────────────
+
+  /// Returns the preference for [merchant] (normalised to uppercase), or null.
+  Future<MerchantPreference?> getMerchantPreference(String merchant) async {
+    final db = await database;
+    final rows = await db.query(
+      tableMerchantPreferences,
+      where: 'merchant = ?',
+      whereArgs: <Object>[merchant.toUpperCase()],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return MerchantPreference.fromMap(rows.first);
+  }
+
+  /// Upserts the trust flag for [merchant].
+  Future<void> setMerchantTrusted(String merchant, {required bool trusted}) async {
+    final key = merchant.toUpperCase();
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    await db.rawInsert(
+      '''
+      INSERT INTO $tableMerchantPreferences (merchant, is_trusted, last_confirmed_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(merchant) DO UPDATE
+        SET is_trusted = excluded.is_trusted,
+            last_confirmed_at = excluded.last_confirmed_at
+      ''',
+      <Object>[key, trusted ? 1 : 0, now],
+    );
+    debugPrint('[DB] setMerchantTrusted merchant=$key trusted=$trusted');
+  }
+
+  // ── Confirmation status helpers ───────────────────────────────────────────
+
+  /// Updates only the confirmation_status (and optionally confidence_score).
+  Future<void> updateConfirmationStatus(
+    int expenseId,
+    String status, {
+    String? confidenceScore,
+  }) async {
+    final db = await database;
+    final data = <String, Object?>{'confirmation_status': status};
+    if (confidenceScore != null) data['confidence_score'] = confidenceScore;
+    await db.update(
+      tableExpenses,
+      data,
+      where: 'id = ?',
+      whereArgs: <Object>[expenseId],
+    );
+    debugPrint(
+      '[DB] updateConfirmationStatus id=$expenseId status=$status',
+    );
+  }
+
+  /// All expenses excluding ignored ones, most-recent first.
+  Future<List<Expense>> getVisibleExpenses() async {
+    final db = await database;
+    final rows = await db.query(
+      tableExpenses,
+      where: "confirmation_status != 'ignored'",
+      orderBy: 'COALESCE(transaction_time, date) DESC, id DESC',
+    );
+    return rows.map(Expense.fromMap).toList();
+  }
+
+  /// Only confirmed expenses — used for analytics totals.
+  Future<List<Expense>> getConfirmedExpenses() async {
+    final db = await database;
+    final rows = await db.query(
+      tableExpenses,
+      where: "confirmation_status = 'confirmed'",
+      orderBy: 'COALESCE(transaction_time, date) DESC, id DESC',
+    );
+    return rows.map(Expense.fromMap).toList();
+  }
+
+  /// Only pending expenses — used for the review banner.
+  Future<List<Expense>> getPendingExpenses() async {
+    final db = await database;
+    final rows = await db.query(
+      tableExpenses,
+      where: "confirmation_status = 'pending'",
+      orderBy: 'COALESCE(transaction_time, date) DESC, id DESC',
+    );
+    return rows.map(Expense.fromMap).toList();
+  }
 }

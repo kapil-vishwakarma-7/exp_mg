@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'
+    show ProviderScope; // only ProviderScope needed here
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -22,7 +24,10 @@ Future<void> main() async {
   await bootstrapSmsDebugListener();
 
   runApp(
-    MultiProvider(
+    // ProviderScope is required by flutter_riverpod. It sits above
+    // MultiProvider so both Riverpod and Provider can coexist.
+    ProviderScope(
+      child: MultiProvider(
       providers: <ChangeNotifierProvider<dynamic>>[
         ChangeNotifierProvider<ThemeProvider>(
           create: (_) => ThemeProvider(),
@@ -38,6 +43,7 @@ Future<void> main() async {
         ),
       ],
       child: const _AppRoot(),
+      ),
     ),
   );
 }

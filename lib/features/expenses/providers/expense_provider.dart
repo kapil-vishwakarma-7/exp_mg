@@ -11,7 +11,14 @@ class ExpenseProvider extends ChangeNotifier {
       : _service = service ?? ExpenseService();
 
   final ExpenseService _service;
+
+  // ── In-memory state ───────────────────────────────────────────────────────
+
+  // All non-ignored expenses (confirmed + pending).
   final List<Expense> _expenses = <Expense>[];
+  // Only pending — drives the "Needs Review" banner.
+  final List<Expense> _pendingExpenses = <Expense>[];
+
   List<RecurringExpense> _upcomingPayments = <RecurringExpense>[];
   List<DetectedSubscription> _subscriptions = <DetectedSubscription>[];
 
@@ -19,16 +26,34 @@ class ExpenseProvider extends ChangeNotifier {
   bool _initialized = false;
   int _refreshVersion = 0;
 
+  // ── Public getters ────────────────────────────────────────────────────────
+
+  /// All non-ignored (confirmed + pending), for the transaction list.
   List<Expense> get expenses => List<Expense>.unmodifiable(_expenses);
+
+  /// Only confirmed — shown on home / used in analytics totals.
+  List<Expense> get confirmedExpenses =>
+      List<Expense>.unmodifiable(_expenses.where((e) => e.isConfirmed).toList());
+
+  /// Only pending — drives the "Needs Review" banner.
+  List<Expense> get pendingExpenses =>
+      List<Expense>.unmodifiable(_pendingExpenses);
+
   List<RecurringExpense> get upcomingPayments =>
       List<RecurringExpense>.unmodifiable(_upcomingPayments);
   List<DetectedSubscription> get subscriptions =>
       List<DetectedSubscription>.unmodifiable(_subscriptions);
+
   bool get isLoading => _isLoading;
   int get refreshVersion => _refreshVersion;
+  int get pendingCount => _pendingExpenses.length;
+
+  /// Total debit spend — confirmed transactions only (excludes pending).
   double get totalAmount => _expenses
-      .where((expense) => expense.isDebit)
-      .fold(0, (total, expense) => total + expense.amount);
+      .where((e) => e.isDebit && e.isConfirmed)
+      .fold(0.0, (sum, e) => sum + e.amount);
+
+  // ── Init ──────────────────────────────────────────────────────────────────
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -37,57 +62,80 @@ class ExpenseProvider extends ChangeNotifier {
     await _service.logRecurringDebugDashboard();
   }
 
+  // ── Data fetch ────────────────────────────────────────────────────────────
+
   Future<void> fetchExpenses() async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final generated = await _service.processRecurringExpenses();
-      debugPrint('[Provider] processRecurringExpenses generated=$generated');
+      await _service.processRecurringExpenses();
 
+      // Visible list (confirmed + pending, no ignored).
       final items = await _service.getAllExpenses();
       _expenses
         ..clear()
         ..addAll(items);
 
+      // Pending-only list for review banner.
+      final pending = await _service.getPendingExpenses();
+      _pendingExpenses
+        ..clear()
+        ..addAll(pending);
+
       await _fetchUpcomingPayments();
       await _fetchSubscriptions();
 
       _refreshVersion++;
-      debugPrint('[Provider] fetchExpenses count=${_expenses.length}');
+      debugPrint(
+        '[Provider] fetchExpenses total=${_expenses.length} '
+        'pending=${_pendingExpenses.length}',
+      );
     } catch (error, stackTrace) {
-      debugPrint('[Provider] fetchExpenses failed: $error');
-      debugPrint('$stackTrace');
+      debugPrint('[Provider] fetchExpenses failed: $error\n$stackTrace');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<List<RecurringExpense>> loadUpcomingPayments({
-    int daysAhead = 7,
-  }) async {
-    return _service.getUpcomingPayments(daysAhead: daysAhead);
+  // ── Confirmation actions ──────────────────────────────────────────────────
+
+  /// Confirms a pending expense and learns the merchant as trusted.
+  Future<void> confirmExpense(Expense expense) async {
+    try {
+      await _service.confirmExpense(expense);
+      // Move from pending → confirmed in-memory immediately.
+      _pendingExpenses.removeWhere((e) => e.id == expense.id);
+      final idx = _expenses.indexWhere((e) => e.id == expense.id);
+      if (idx != -1) {
+        _expenses[idx] = expense.copyWith(
+          confirmationStatus: ConfirmationStatus.confirmed,
+        );
+      }
+      _refreshVersion++;
+      notifyListeners();
+      debugPrint('[Provider] confirmExpense id=${expense.id}');
+    } catch (e, st) {
+      debugPrint('[Provider] confirmExpense error: $e\n$st');
+    }
   }
 
-  Future<void> _fetchUpcomingPayments({int daysAhead = 7}) async {
-    _upcomingPayments =
-        await _service.getUpcomingPayments(daysAhead: daysAhead);
-    debugPrint(
-      '[Provider] upcomingPayments count=${_upcomingPayments.length}',
-    );
+  /// Ignores a pending expense — removes it from all lists.
+  Future<void> ignoreExpense(Expense expense) async {
+    try {
+      await _service.ignoreExpense(expense);
+      _pendingExpenses.removeWhere((e) => e.id == expense.id);
+      _expenses.removeWhere((e) => e.id == expense.id);
+      _refreshVersion++;
+      notifyListeners();
+      debugPrint('[Provider] ignoreExpense id=${expense.id}');
+    } catch (e, st) {
+      debugPrint('[Provider] ignoreExpense error: $e\n$st');
+    }
   }
 
-  Future<void> _fetchSubscriptions() async {
-    _subscriptions = await _service.getAllSubscriptions();
-    debugPrint('[Provider] subscriptions count=${_subscriptions.length}');
-  }
-
-  Future<List<DetectedSubscription>> loadUpcomingSubscriptions({
-    int daysAhead = 7,
-  }) {
-    return _service.getUpcomingSubscriptions(daysAhead: daysAhead);
-  }
+  // ── CRUD ──────────────────────────────────────────────────────────────────
 
   Future<bool> addExpense({
     required Expense expense,
@@ -98,64 +146,83 @@ class ExpenseProvider extends ChangeNotifier {
         expense: expense,
         recurring: recurring,
       );
-      if (!saved) {
-        debugPrint('[Provider] addExpense failed: insert returned false');
-        return false;
-      }
-
-      debugPrint('[Provider] addExpense success');
+      if (!saved) return false;
       await fetchExpenses();
       return true;
-    } catch (error, stackTrace) {
-      debugPrint('[Provider] addExpense failed: $error');
-      debugPrint('$stackTrace');
+    } catch (e, st) {
+      debugPrint('[Provider] addExpense failed: $e\n$st');
       return false;
     }
   }
 
   Future<bool> updateExpense(Expense expense) async {
     try {
-      await _service.updateExpense(expense);
-      debugPrint('[Provider] updateExpense id=${expense.id}');
-      // Update in-memory list immediately for instant UI feedback.
-      final idx = _expenses.indexWhere((e) => e.id == expense.id);
+      // Auto-confirm when user manually edits.
+      final toSave = expense.isConfirmed
+          ? expense
+          : expense.copyWith(
+              confirmationStatus: ConfirmationStatus.confirmed,
+            );
+      await _service.updateExpense(toSave);
+      final idx = _expenses.indexWhere((e) => e.id == toSave.id);
       if (idx != -1) {
-        _expenses[idx] = expense;
+        _expenses[idx] = toSave;
+        _pendingExpenses.removeWhere((e) => e.id == toSave.id);
         _refreshVersion++;
         notifyListeners();
       } else {
         await fetchExpenses();
       }
+      debugPrint('[Provider] updateExpense id=${toSave.id}');
       return true;
-    } catch (error, stackTrace) {
-      debugPrint('[Provider] updateExpense failed: $error');
-      debugPrint('$stackTrace');
+    } catch (e, st) {
+      debugPrint('[Provider] updateExpense failed: $e\n$st');
       return false;
     }
   }
 
-  /// Re-inserts a previously deleted expense (undo delete).
   Future<void> restoreExpense(Expense expense) async {
     try {
-      // Strip the id so DB assigns a new one on insert.
-      final restored = expense.copyWith(id: null);
-      await _service.insertExpense(restored);
-      debugPrint('[Provider] restoreExpense title=${expense.title}');
+      await _service.insertExpense(expense.copyWith(id: null));
       await fetchExpenses();
-    } catch (error, stackTrace) {
-      debugPrint('[Provider] restoreExpense failed: $error');
-      debugPrint('$stackTrace');
+    } catch (e, st) {
+      debugPrint('[Provider] restoreExpense failed: $e\n$st');
     }
   }
 
   Future<void> deleteExpense(int id) async {
     try {
       await _service.deleteExpense(id);
-      debugPrint('[Provider] deleteExpense id=$id');
-      await fetchExpenses();
-    } catch (error, stackTrace) {
-      debugPrint('[Provider] deleteExpense failed: $error');
-      debugPrint('$stackTrace');
+      _expenses.removeWhere((e) => e.id == id);
+      _pendingExpenses.removeWhere((e) => e.id == id);
+      _refreshVersion++;
+      notifyListeners();
+    } catch (e, st) {
+      debugPrint('[Provider] deleteExpense failed: $e\n$st');
     }
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  Future<List<RecurringExpense>> loadUpcomingPayments({
+    int daysAhead = 7,
+  }) =>
+      _service.getUpcomingPayments(daysAhead: daysAhead);
+
+  Future<List<DetectedSubscription>> loadUpcomingSubscriptions({
+    int daysAhead = 7,
+  }) =>
+      _service.getUpcomingSubscriptions(daysAhead: daysAhead);
+
+  Future<void> _fetchUpcomingPayments({int daysAhead = 7}) async {
+    _upcomingPayments =
+        await _service.getUpcomingPayments(daysAhead: daysAhead);
+    debugPrint(
+        '[Provider] upcomingPayments count=${_upcomingPayments.length}');
+  }
+
+  Future<void> _fetchSubscriptions() async {
+    _subscriptions = await _service.getAllSubscriptions();
+    debugPrint('[Provider] subscriptions count=${_subscriptions.length}');
   }
 }

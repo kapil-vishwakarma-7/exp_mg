@@ -15,6 +15,8 @@ class Expense {
     this.isSubscription = false,
     this.subscriptionId,
     this.subscriptionFrequency,
+    this.confirmationStatus = ConfirmationStatus.confirmed,
+    this.confidenceScore = ConfidenceScore.medium,
   })  : createdAt = createdAt ?? date,
         transactionTime = transactionTime ?? date;
 
@@ -30,18 +32,23 @@ class Expense {
   final String? merchant;
   final String? rawSms;
   final String? smsHash;
-
-  /// True when this expense has been identified as a recurring/subscription payment.
   final bool isSubscription;
-
-  /// FK into the subscriptions table (null for non-subscription expenses).
   final int? subscriptionId;
-
-  /// Frequency string from the linked subscription ('monthly', 'weekly', …).
   final String? subscriptionFrequency;
+
+  /// One of [ConfirmationStatus] values.
+  final String confirmationStatus;
+
+  /// One of [ConfidenceScore] values.
+  final String confidenceScore;
+
+  // ── Convenience getters ───────────────────────────────────────────────────
 
   bool get isDebit => transactionType == null || transactionType == 'debit';
   bool get isCredit => transactionType == 'credit';
+  bool get isConfirmed => confirmationStatus == ConfirmationStatus.confirmed;
+  bool get isPending => confirmationStatus == ConfirmationStatus.pending;
+  bool get isIgnored => confirmationStatus == ConfirmationStatus.ignored;
 
   Expense copyWith({
     int? id,
@@ -59,6 +66,8 @@ class Expense {
     bool? isSubscription,
     int? subscriptionId,
     String? subscriptionFrequency,
+    String? confirmationStatus,
+    String? confidenceScore,
   }) {
     return Expense(
       id: id ?? this.id,
@@ -77,6 +86,8 @@ class Expense {
       subscriptionId: subscriptionId ?? this.subscriptionId,
       subscriptionFrequency:
           subscriptionFrequency ?? this.subscriptionFrequency,
+      confirmationStatus: confirmationStatus ?? this.confirmationStatus,
+      confidenceScore: confidenceScore ?? this.confidenceScore,
     );
   }
 
@@ -96,6 +107,8 @@ class Expense {
       'sms_hash': smsHash,
       'is_subscription': isSubscription ? 1 : 0,
       'subscription_id': subscriptionId,
+      'confirmation_status': confirmationStatus,
+      'confidence_score': confidenceScore,
     };
   }
 
@@ -121,7 +134,24 @@ class Expense {
       smsHash: map['sms_hash'] as String?,
       isSubscription: (map['is_subscription'] as int? ?? 0) == 1,
       subscriptionId: map['subscription_id'] as int?,
-      // subscriptionFrequency is joined separately when needed.
+      confirmationStatus: (map['confirmation_status'] as String?) ??
+          ConfirmationStatus.confirmed,
+      confidenceScore:
+          (map['confidence_score'] as String?) ?? ConfidenceScore.medium,
     );
   }
+}
+
+// ── Value-object enums (plain string constants for SQLite) ────────────────────
+
+abstract final class ConfirmationStatus {
+  static const String confirmed = 'confirmed';
+  static const String pending = 'pending';
+  static const String ignored = 'ignored';
+}
+
+abstract final class ConfidenceScore {
+  static const String high = 'high';
+  static const String medium = 'medium';
+  static const String low = 'low';
 }

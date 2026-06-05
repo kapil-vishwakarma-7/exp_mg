@@ -10,6 +10,8 @@ class ParsedTransaction {
     this.balance,
     this.isSubscription = false,
     this.subscriptionId,
+    this.confidenceScore = 'medium',
+    this.confirmationStatus = 'pending',
   });
 
   final double amount;
@@ -28,6 +30,12 @@ class ParsedTransaction {
   /// Foreign key into the `subscriptions` table once a subscription record
   /// has been created or matched for this transaction.
   final int? subscriptionId;
+
+  /// Parser-assigned confidence: 'high' | 'medium' | 'low'
+  final String confidenceScore;
+
+  /// Initial confirmation status: 'confirmed' | 'pending' | 'ignored'
+  final String confirmationStatus;
 
   /// Alias for legacy code paths.
   DateTime get date => transactionTime;
@@ -56,6 +64,8 @@ class ParsedTransaction {
     double? balance,
     bool? isSubscription,
     int? subscriptionId,
+    String? confidenceScore,
+    String? confirmationStatus,
   }) {
     return ParsedTransaction(
       amount: amount ?? this.amount,
@@ -68,6 +78,8 @@ class ParsedTransaction {
       balance: balance ?? this.balance,
       isSubscription: isSubscription ?? this.isSubscription,
       subscriptionId: subscriptionId ?? this.subscriptionId,
+      confidenceScore: confidenceScore ?? this.confidenceScore,
+      confirmationStatus: confirmationStatus ?? this.confirmationStatus,
     );
   }
 
@@ -81,6 +93,8 @@ class ParsedTransaction {
         'transactionTime': transactionTime.toIso8601String(),
         'isSubscription': isSubscription,
         'subscriptionId': subscriptionId,
+        'confidenceScore': confidenceScore,
+        'confirmationStatus': confirmationStatus,
       };
 
   @override

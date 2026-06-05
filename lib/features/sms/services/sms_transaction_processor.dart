@@ -1,4 +1,5 @@
 import '../../expenses/database/database_helper.dart';
+import '../../expenses/services/confirmation_service.dart';
 import '../models/parsed_transaction.dart';
 import '../utils/sms_logger.dart';
 import 'sms_deduplicator.dart';
@@ -9,15 +10,18 @@ class SmsTransactionProcessor {
     DatabaseHelper? databaseHelper,
     SmsDeduplicator? deduplicator,
     SubscriptionService? subscriptionService,
+    ConfirmationService? confirmationService,
   })  : _db = databaseHelper ?? DatabaseHelper.instance,
         _deduplicator = deduplicator ??
             SmsDeduplicator(databaseHelper: databaseHelper),
-        _subscriptionService =
-            subscriptionService ?? SubscriptionService();
+        _subscriptionService = subscriptionService ?? SubscriptionService(),
+        _confirmationService =
+            confirmationService ?? ConfirmationService();
 
   final DatabaseHelper _db;
   final SmsDeduplicator _deduplicator;
   final SubscriptionService _subscriptionService;
+  final ConfirmationService _confirmationService;
 
   Future<bool> saveIfNew(ParsedTransaction transaction) async {
     SmsLogger.db('Checking duplicate before save…');
@@ -33,23 +37,30 @@ class SmsTransactionProcessor {
         return false;
       }
 
-      SmsLogger.db('Transaction saved successfully id=$id');
+      SmsLogger.db('Transaction saved id=$id');
 
-      // Step 8 — run subscription detection in the background.
-      // Fire-and-forget: never block or fail the main save path.
+      // Auto-confirm if merchant is already trusted (fire-and-forget).
       unawaited(
-        _subscriptionService.detectAndLink(
-          transaction,
-          savedExpenseId: id,
-        ).then((sub) {
+        _confirmationService
+            .autoConfirmIfTrusted(id, transaction.merchant)
+            .catchError((Object e) {
+          SmsLogger.db('[CONFIRM] autoConfirm error: $e');
+        }),
+      );
+
+      // Subscription detection (fire-and-forget).
+      unawaited(
+        _subscriptionService
+            .detectAndLink(transaction, savedExpenseId: id)
+            .then((sub) {
           if (sub != null) {
             SmsLogger.db(
-              '[SUB] Linked expense id=$id → subscription id=${sub.id} '
-              '(${sub.merchant}, confidence=${sub.confidenceScore})',
+              '[SUB] Linked expense id=$id → sub id=${sub.id} '
+              '(${sub.merchant})',
             );
           }
         }).catchError((Object e) {
-          SmsLogger.db('[SUB] detectAndLink failed silently: $e');
+          SmsLogger.db('[SUB] detectAndLink error: $e');
         }),
       );
 
