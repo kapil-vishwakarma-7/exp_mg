@@ -89,9 +89,14 @@ class SmsParser {
       // Step 3: normalise merchant (uppercase, trimmed)
       final normalisedMerchant = merchant.trim().toUpperCase();
 
-      // Step 4: known subscription merchant list
-      final isKnownSubMerchant = _rules.subscriptionMerchants
-          .any(normalisedMerchant.toLowerCase().contains);
+      // Step 4: known subscription merchant list.
+      // When the merchant pattern couldn't extract a name (returns "Unknown"),
+      // scan the raw SMS body directly so "NETFLIX subscription" still matches.
+      final searchTarget = merchant == 'Unknown'
+          ? lower
+          : normalisedMerchant.toLowerCase();
+      final isKnownSubMerchant =
+          _rules.subscriptionMerchants.any(searchTarget.contains);
 
       final isSubscription = isSubKeyword || isKnownSubMerchant;
 
@@ -107,9 +112,10 @@ class SmsParser {
       // medium : named pattern matched (debit/credit specific)
       // low    : generic fallback pattern used
       final String confidence;
+      final merchantLower = merchant == 'Unknown' ? lower : merchant.toLowerCase();
       if (amountResult.patternName != 'generic' &&
           (isKnownSubMerchant ||
-              _rules.categoryKeywords.containsKey(merchant.toLowerCase()))) {
+              _rules.categoryKeywords.keys.any(merchantLower.contains))) {
         confidence = ConfidenceScore.high;
       } else if (amountResult.patternName != 'generic') {
         confidence = ConfidenceScore.medium;

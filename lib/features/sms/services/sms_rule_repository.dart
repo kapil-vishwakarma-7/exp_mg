@@ -81,27 +81,35 @@ class SmsRuleRepository {
   // ── Startup loading ───────────────────────────────────────────────────────
 
   Future<void> _loadStartupRules() async {
-    // Step 1 – try cache
+    // Always load the bundled asset first so we know its version.
+    final asset = await _loadFromAsset();
     final cached = await _loadFromCache();
-    if (cached != null) {
+
+    // Pick whichever is newer: if the bundled asset has been updated (e.g. a
+    // new app build ships version 2 rules) it wins over a stale v1 cache.
+    if (cached != null && cached.version >= (asset?.version ?? 0)) {
       _rules = cached;
-      SmsLogger.sms('[RULES] Loaded rules from cache | version=${cached.version}');
+      SmsLogger.sms(
+        '[RULES] Loaded rules from cache | version=${cached.version}',
+      );
       return;
     }
 
-    // Step 2 – fall back to bundled asset
-    final asset = await _loadFromAsset();
     if (asset != null) {
       _rules = asset;
-      SmsLogger.sms('[RULES] Loaded rules from local asset | version=${asset.version}');
-      // Step 3 – seed the cache with the asset so next launch hits cache
+      SmsLogger.sms(
+        '[RULES] Bundled asset is newer — overwriting cache | '
+        'asset=${asset.version} cache=${cached?.version ?? "none"}',
+      );
+      // Overwrite cache so next launch hits the correct version.
       await _writeCache(asset.toJsonString());
-      SmsLogger.sms('[RULES] Local asset written to cache');
       return;
     }
 
-    // Should never happen — asset is always bundled. Log and surface crash.
-    throw StateError('[RULES] Failed to load SMS rules from both cache and asset.');
+    // Should never happen — asset is always bundled.
+    throw StateError(
+      '[RULES] Failed to load SMS rules from both cache and asset.',
+    );
   }
 
   // ── Periodic sync ─────────────────────────────────────────────────────────
