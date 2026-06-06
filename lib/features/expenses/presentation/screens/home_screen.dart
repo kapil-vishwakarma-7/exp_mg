@@ -198,12 +198,15 @@ class _ExpenseListSection extends StatelessWidget {
       );
     }
 
-    if (provider.expenses.isEmpty) {
+    // Only confirmed transactions on the home screen.
+    final confirmed = provider.confirmedExpenses;
+
+    if (confirmed.isEmpty) {
       return const _RecentEmptyState();
     }
 
     return Column(
-      children: provider.expenses
+      children: confirmed
           .map(
             (expense) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
