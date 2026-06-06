@@ -216,6 +216,8 @@ class _ExpenseListSection extends StatelessWidget {
                 amount: '-${formatExpenseAmount(expense.amount)}',
                 isExpense: true,
                 icon: categoryIcon(expense.category),
+                isSubscription: expense.isSubscription,
+                subscriptionFrequency: expense.subscriptionFrequency,
               ),
             ),
           )
