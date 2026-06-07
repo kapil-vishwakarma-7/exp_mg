@@ -6,6 +6,7 @@ import '../../../../features/sms/models/detected_subscription.dart';
 import '../../models/expense.dart';
 import '../../providers/expense_provider.dart';
 import '../utils/expense_ui_helpers.dart';
+import '../widgets/subscription_details_sheet.dart';
 import '../widgets/transaction_detail_sheet.dart';
 import '../widgets/transaction_tile.dart';
 import 'edit_expense_sheet.dart';

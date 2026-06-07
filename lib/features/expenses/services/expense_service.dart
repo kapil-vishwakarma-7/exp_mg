@@ -108,6 +108,9 @@ class ExpenseService {
 
   // ── Subscription queries ──────────────────────────────────────────────────
 
+  Future<void> updateSubscription(DetectedSubscription sub) =>
+      _databaseHelper.updateSubscription(sub);
+
   Future<List<DetectedSubscription>> getAllSubscriptions() =>
       _databaseHelper.getAllSubscriptions();
 

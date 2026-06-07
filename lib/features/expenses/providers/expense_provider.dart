@@ -5,6 +5,10 @@ import '../models/recurring_data.dart';
 import '../models/recurring_expense.dart';
 import '../services/expense_service.dart';
 import '../../sms/models/detected_subscription.dart';
+import '../../sms/models/parsed_transaction.dart';
+import '../../sms/services/subscription_service.dart';
+import '../presentation/widgets/subscription_details_sheet.dart'
+    show SubscriptionDetails;
 
 class ExpenseProvider extends ChangeNotifier {
   ExpenseProvider({ExpenseService? service})
@@ -121,6 +125,60 @@ class ExpenseProvider extends ChangeNotifier {
     }
   }
 
+  /// Confirms a pending subscription expense AND upserts the subscription
+  /// record with user-provided details from [SubscriptionDetailsSheet].
+  Future<void> confirmSubscription(
+    Expense expense,
+    SubscriptionDetails details,
+  ) async {
+    try {
+      // 1. Confirm the expense in the DB and mark merchant trusted.
+      await _service.confirmExpense(expense);
+
+      // 2. Upsert the subscription record with user-confirmed details.
+      final subscriptionService = SubscriptionService();
+
+      // Build a minimal ParsedTransaction so SubscriptionService can upsert.
+      final syntheticTx = ParsedTransaction(
+        amount: expense.amount,
+        type: 'debit',
+        merchant: expense.merchant ?? details.displayName,
+        category: expense.category,
+        transactionTime: expense.transactionTime,
+        rawSms: expense.rawSms ?? '',
+        isSubscription: true,
+        confidenceScore: 'high', // user confirmed = high confidence
+        confirmationStatus: ConfirmationStatus.confirmed,
+      );
+
+      await subscriptionService.detectAndLink(
+        syntheticTx,
+        savedExpenseId: expense.id!,
+      );
+
+      // 3. Update in-memory state.
+      _pendingExpenses.removeWhere((e) => e.id == expense.id);
+      final idx = _expenses.indexWhere((e) => e.id == expense.id);
+      if (idx != -1) {
+        _expenses[idx] = expense.copyWith(
+          confirmationStatus: ConfirmationStatus.confirmed,
+        );
+      }
+
+      // Refresh subscriptions list so the subscriptions screen updates.
+      await _fetchSubscriptions();
+
+      _refreshVersion++;
+      notifyListeners();
+      debugPrint(
+        '[Provider] confirmSubscription id=${expense.id} '
+        'name=${details.displayName} freq=${details.frequency}',
+      );
+    } catch (e, st) {
+      debugPrint('[Provider] confirmSubscription error: $e\n$st');
+    }
+  }
+
   /// Ignores a pending expense — removes it from all lists.
   Future<void> ignoreExpense(Expense expense) async {
     try {
@@ -177,6 +235,40 @@ class ExpenseProvider extends ChangeNotifier {
       return true;
     } catch (e, st) {
       debugPrint('[Provider] updateExpense failed: $e\n$st');
+      return false;
+    }
+  }
+
+  /// Updates both the expense AND the linked subscription record together.
+  Future<bool> updateExpenseWithSubscription(
+    Expense expense,
+    DetectedSubscription subscription,
+  ) async {
+    try {
+      final toSave = expense.isConfirmed
+          ? expense
+          : expense.copyWith(confirmationStatus: ConfirmationStatus.confirmed);
+      await _service.updateExpense(toSave);
+      await _service.updateSubscription(subscription);
+
+      final idx = _expenses.indexWhere((e) => e.id == toSave.id);
+      if (idx != -1) {
+        _expenses[idx] = toSave;
+        _pendingExpenses.removeWhere((e) => e.id == toSave.id);
+      }
+
+      // Refresh the subscriptions list so the subscriptions screen is current.
+      await _fetchSubscriptions();
+
+      _refreshVersion++;
+      notifyListeners();
+      debugPrint(
+        '[Provider] updateExpenseWithSubscription id=${toSave.id} '
+        'subId=${subscription.id}',
+      );
+      return true;
+    } catch (e, st) {
+      debugPrint('[Provider] updateExpenseWithSubscription failed: $e\n$st');
       return false;
     }
   }
