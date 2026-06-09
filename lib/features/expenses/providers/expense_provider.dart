@@ -298,8 +298,56 @@ class ExpenseProvider extends ChangeNotifier {
 
   Future<List<RecurringExpense>> loadUpcomingPayments({
     int daysAhead = 7,
-  }) =>
-      _service.getUpcomingPayments(daysAhead: daysAhead);
+  }) async {
+    // ── Source 1: manually-created recurring_expenses ─────────────────────
+    final recurring = await _service.getUpcomingPayments(daysAhead: daysAhead);
+
+    // ── Source 2: SMS-detected subscriptions ──────────────────────────────
+    // Convert DetectedSubscription → RecurringExpense so the UI layer
+    // (UpcomingPaymentsSection / UpcomingPaymentsScreen) needs no changes.
+    final detectedSubs = await _service.getUpcomingSubscriptions(
+      daysAhead: daysAhead,
+    );
+    final subsAsRecurring = detectedSubs.map(_subToRecurring).toList();
+
+    // Merge and sort by next_due_date, deduplicate by title+amount.
+    final seen = <String>{};
+    final merged = <RecurringExpense>[];
+
+    for (final item in <RecurringExpense>[...recurring, ...subsAsRecurring]) {
+      final key = '${item.title.toLowerCase()}|${item.amount}';
+      if (seen.add(key)) merged.add(item);
+    }
+
+    merged.sort(
+      (a, b) => a.nextDueDate.compareTo(b.nextDueDate),
+    );
+
+    debugPrint('[Provider] loadUpcomingPayments merged=${merged.length} '
+        '(recurring=${recurring.length}, detected=${subsAsRecurring.length})');
+    return merged;
+  }
+
+  /// Converts a [DetectedSubscription] into a [RecurringExpense] shape
+  /// so it can be displayed by the existing upcoming-payments UI unchanged.
+  RecurringExpense _subToRecurring(DetectedSubscription sub) {
+    // Map subscription frequency string to the recurring_expenses convention.
+    final freq = sub.frequency.toLowerCase();
+    final interval = freq == 'weekly' ? 7 : 1; // days for weekly, 1 for rest
+
+    return RecurringExpense(
+      id: sub.id,
+      title: sub.merchant,
+      amount: sub.amount,
+      category: sub.category,
+      frequency: freq == 'weekly' ? 'weekly' : freq,
+      interval: interval,
+      startDate: sub.lastPaidDate,
+      nextDueDate: sub.nextDueDate,
+      autoAdd: false, // SMS subscriptions don't auto-add expense rows
+      createdAt: sub.createdAt,
+    );
+  }
 
   Future<List<DetectedSubscription>> loadUpcomingSubscriptions({
     int daysAhead = 7,

@@ -369,8 +369,10 @@ class DatabaseHelper {
   Future<List<RecurringExpense>> getUpcomingPayments({int daysAhead = 7}) async {
     final now = DateTime.now();
     final today = dateOnly(now);
+    // Include one day before today as a buffer for timezone edge cases.
+    final from = today.subtract(const Duration(days: 1));
     final futureDate = today.add(Duration(days: daysAhead));
-    final todayIso = toIsoDateString(today);
+    final fromIso = toIsoDateString(from);
     final futureIso = toIsoDateString(futureDate);
     final db = await database;
 
@@ -379,12 +381,12 @@ class DatabaseHelper {
       where:
           'next_due_date IS NOT NULL AND next_due_date != ? AND '
           'date(next_due_date) >= date(?) AND date(next_due_date) <= date(?)',
-      whereArgs: <String>['', todayIso, futureIso],
+      whereArgs: <String>['', fromIso, futureIso],
       orderBy: 'next_due_date ASC',
     );
 
     debugPrint(
-      '[DB] getUpcomingPayments today=$todayIso future=$futureIso raw=${rows.length}',
+      '[DB] getUpcomingPayments from=$fromIso future=$futureIso raw=${rows.length}',
     );
 
     final list = <RecurringExpense>[];
@@ -515,6 +517,8 @@ class DatabaseHelper {
   }) async {
     final now = DateTime.now();
     final today = dateOnly(now);
+    // One-day buffer so today's due subscriptions are never missed.
+    final from = today.subtract(const Duration(days: 1));
     final future = today.add(Duration(days: daysAhead));
     final db = await database;
     final rows = await db.query(
@@ -523,7 +527,7 @@ class DatabaseHelper {
           'is_active = 1 AND '
           'date(next_due_date) >= date(?) AND date(next_due_date) <= date(?)',
       whereArgs: <String>[
-        toIsoDateString(today),
+        toIsoDateString(from),
         toIsoDateString(future),
       ],
       orderBy: 'next_due_date ASC',
