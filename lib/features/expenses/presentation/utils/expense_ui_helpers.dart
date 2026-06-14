@@ -39,7 +39,27 @@ String dateGroupLabel(DateTime date) {
 }
 
 String expenseDisplayTitle(Expense expense) {
+  // For subscription expenses, prefer the merchant name and present it in
+  // readable Title Case (the subscriptions table stores it uppercased).
+  if (expense.isSubscription) {
+    final merchant = expense.merchant ?? expense.title;
+    if (merchant.isNotEmpty && merchant != 'Unknown') {
+      return _toTitleCase(merchant);
+    }
+  }
+
   if (expense.title.isNotEmpty) return expense.title;
   if (expense.note.isNotEmpty) return expense.note;
   return expense.category;
+}
+
+/// Converts "NETFLIX" → "Netflix", "AMAZON PRIME" → "Amazon Prime".
+String _toTitleCase(String value) {
+  return value
+      .toLowerCase()
+      .split(' ')
+      .map((word) => word.isEmpty
+          ? word
+          : word[0].toUpperCase() + word.substring(1))
+      .join(' ');
 }

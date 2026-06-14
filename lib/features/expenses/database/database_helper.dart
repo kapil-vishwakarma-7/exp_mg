@@ -328,6 +328,35 @@ class DatabaseHelper {
     return updated;
   }
 
+  /// Patches an SMS-sourced expense row with AI-enriched fields.
+  /// Only merchant, category, confidence_score, and confirmation_status
+  /// are updated — amount, type, and date are never changed.
+  Future<void> enrichParsedTransaction({
+    required String dedupeKey,
+    required String merchant,
+    required String category,
+    required String confidenceScore,
+    required String confirmationStatus,
+  }) async {
+    if (dedupeKey.isEmpty) return;
+    final db = await database;
+    final updated = await db.update(
+      tableExpenses,
+      <String, Object?>{
+        'merchant': merchant,
+        'title': merchant, // keep title in sync
+        'category': category,
+        'confidence_score': confidenceScore,
+        'confirmation_status': confirmationStatus,
+      },
+      where: 'sms_hash = ?',
+      whereArgs: <Object>[dedupeKey],
+    );
+    debugPrint(
+      '[DB] enrichParsedTransaction sms_hash=$dedupeKey updated=$updated',
+    );
+  }
+
   Future<int> insertRecurringExpense(RecurringExpense recurring) async {
     final db = await database;
     final data = recurring.toDbMap();

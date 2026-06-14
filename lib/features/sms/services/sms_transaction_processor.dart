@@ -71,6 +71,32 @@ class SmsTransactionProcessor {
       rethrow;
     }
   }
+
+  /// Updates an already-saved transaction with AI-enriched fields.
+  ///
+  /// Finds the existing record by [original]'s dedupeKey and overwrites
+  /// merchant, category, confidenceScore, and confirmationStatus with the
+  /// values from [enriched]. Amount, type, and date are never changed.
+  Future<void> enrichTransaction(
+    ParsedTransaction original,
+    ParsedTransaction enriched,
+  ) async {
+    try {
+      await _db.enrichParsedTransaction(
+        dedupeKey: original.dedupeKey,
+        merchant: enriched.merchant,
+        category: enriched.category,
+        confidenceScore: enriched.confidenceScore,
+        confirmationStatus: enriched.confirmationStatus,
+      );
+      SmsLogger.db(
+        '[ENRICH] Updated merchant=${enriched.merchant} '
+        'category=${enriched.category}',
+      );
+    } catch (e) {
+      SmsLogger.db('[ENRICH] Failed (ignored): $e');
+    }
+  }
 }
 
 // Avoids the `unawaited_futures` lint without importing async package.
