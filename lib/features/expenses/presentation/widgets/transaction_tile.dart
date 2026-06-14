@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import 'merchant_icon_widget.dart';
+
 class TransactionTile extends StatelessWidget {
   const TransactionTile({
     super.key,
@@ -8,6 +10,10 @@ class TransactionTile extends StatelessWidget {
     required this.dateTimeText,
     required this.amount,
     required this.isExpense,
+    // ── Merchant icon fields ───────────────────────────────────────────────
+    this.merchantName,
+    this.category = 'Others',
+    /// Kept for backwards-compatibility — ignored when [merchantName] is set.
     this.icon,
     // ── Subscription fields ────────────────────────────────────────────────
     this.isSubscription = false,
@@ -21,20 +27,21 @@ class TransactionTile extends StatelessWidget {
   final String dateTimeText;
   final String amount;
   final bool isExpense;
+
+  /// Merchant name used to resolve the local icon via [MerchantIconWidget].
+  /// When null or "Unknown" the widget falls back to [icon] / category icon.
+  final String? merchantName;
+
+  /// Category string used for the fallback icon ("Food", "Travel", etc.).
+  final String category;
+
+  /// Legacy fallback — used when [merchantName] is absent.
   final IconData? icon;
 
   final bool isSubscription;
-
-  /// 'monthly' | 'weekly' | 'biweekly' | etc.
   final String? subscriptionFrequency;
-
-  /// Used to show "Next: 5 Jul" and the "⚠ Due soon" warning.
   final DateTime? nextDueDate;
-
-  /// 'low' | 'medium' | 'high' — controls how much detail is shown.
   final String? confidenceScore;
-
-  /// Optional tap handler — used to open the detail sheet.
   final VoidCallback? onTap;
 
   // ── Derived helpers ───────────────────────────────────────────────────────
@@ -62,6 +69,13 @@ class TransactionTile extends StatelessWidget {
     return DateFormat('d MMM').format(nextDueDate!);
   }
 
+  // ── Whether to use MerchantIconWidget or the legacy icon ─────────────────
+
+  bool get _useMerchantIcon =>
+      merchantName != null &&
+      merchantName!.isNotEmpty &&
+      merchantName != 'Unknown';
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -88,30 +102,15 @@ class TransactionTile extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
-                // ── Category icon ──────────────────────────────────────────
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: isSubscription
-                        ? cs.primary.withValues(alpha: 0.1)
-                        : cs.surfaceContainerHighest,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    icon ?? Icons.account_balance_wallet_outlined,
-                    color: isSubscription ? cs.primary : cs.onSurface,
-                    size: 20,
-                  ),
-                ),
+                // ── Merchant icon (local file) or category fallback ────────
+                _buildIcon(cs),
                 const SizedBox(width: 12),
 
-                // ── Title + subtitle block ─────────────────────────────────
+                // ── Title + subtitle ───────────────────────────────────────
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      // Title row with optional 🔁 icon
                       Row(
                         children: <Widget>[
                           Flexible(
@@ -138,8 +137,6 @@ class TransactionTile extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 2),
-
-                      // Subscription subtitle OR plain date
                       if (_showDetails) ...<Widget>[
                         Row(
                           children: <Widget>[
@@ -210,6 +207,35 @@ class TransactionTile extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildIcon(ColorScheme cs) {
+    // If we have a merchant name, delegate to MerchantIconWidget which
+    // handles local file → category icon fallback automatically.
+    if (_useMerchantIcon) {
+      return MerchantIconWidget(
+        merchantName: merchantName!,
+        category: category,
+        size: 42,
+      );
+    }
+
+    // Legacy path: plain category / supplied icon inside a circle.
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: isSubscription
+            ? cs.primary.withValues(alpha: 0.1)
+            : cs.surfaceContainerHighest,
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        icon ?? Icons.account_balance_wallet_outlined,
+        color: isSubscription ? cs.primary : cs.onSurface,
+        size: 20,
       ),
     );
   }

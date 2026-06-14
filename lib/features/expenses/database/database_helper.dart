@@ -3,6 +3,7 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../models/expense.dart';
+import '../models/merchant_icon.dart';
 import '../models/merchant_preference.dart';
 import '../models/recurring_expense.dart';
 import '../../sms/models/detected_subscription.dart';
@@ -17,12 +18,13 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const String _databaseName = 'expenses.db';
-  static const int _databaseVersion = 9;
+  static const int _databaseVersion = 10;
   static const String tableExpenses = 'expenses';
   static const String tableRecurringExpenses = 'recurring_expenses';
   static const String tableUserProfile = 'user_profile';
   static const String tableSubscriptions = 'subscriptions';
   static const String tableMerchantPreferences = 'merchant_preferences';
+  static const String tableMerchants = 'merchants';
 
   Database? _database;
 
@@ -52,6 +54,7 @@ class DatabaseHelper {
     await _createUserProfileTable(db);
     await _createSubscriptionsTable(db);
     await _createMerchantPreferencesTable(db);
+    await _createMerchantsTable(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -103,6 +106,10 @@ class DatabaseHelper {
     if (oldVersion < 9) {
       await _migrateExpensesConfirmationColumns(db);
       await _createMerchantPreferencesTable(db);
+    }
+
+    if (oldVersion < 10) {
+      await _createMerchantsTable(db);
     }
   }
 
@@ -649,6 +656,102 @@ class DatabaseHelper {
   }
 
   Future<void> logDebugDashboard() => logRecurringDebugDashboard(this);
+
+  // ── Merchants table ───────────────────────────────────────────────────────
+
+  Future<void> _createMerchantsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $tableMerchants(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        domain TEXT,
+        icon_url TEXT,
+        local_icon_path TEXT,
+        category TEXT NOT NULL DEFAULT 'Others',
+        created_at TEXT NOT NULL,
+        updated_at TEXT
+      )
+    ''');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_merchants_name
+      ON $tableMerchants(name)
+    ''');
+    debugPrint('[DB] merchants table ready');
+  }
+
+  // ── Merchant icon CRUD ────────────────────────────────────────────────────
+
+  /// Returns the merchant entry for [name] (normalised to lowercase), or null.
+  Future<MerchantIcon?> getMerchantByName(String name) async {
+    final key = _normaliseMerchantKey(name);
+    final db = await database;
+    final rows = await db.query(
+      tableMerchants,
+      where: 'name = ?',
+      whereArgs: <Object>[key],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return MerchantIcon.fromMap(rows.first);
+  }
+
+  /// Inserts a new merchant or updates its icon fields if it already exists.
+  Future<MerchantIcon> upsertMerchant({
+    required String name,
+    String? domain,
+    String? iconUrl,
+    String? localIconPath,
+    required String category,
+  }) async {
+    final key = _normaliseMerchantKey(name);
+    final db = await database;
+    final now = DateTime.now();
+
+    await db.rawInsert(
+      '''
+      INSERT INTO $tableMerchants
+        (name, domain, icon_url, local_icon_path, category, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(name) DO UPDATE SET
+        domain         = COALESCE(excluded.domain, domain),
+        icon_url       = COALESCE(excluded.icon_url, icon_url),
+        local_icon_path = COALESCE(excluded.local_icon_path, local_icon_path),
+        category       = excluded.category,
+        updated_at     = excluded.updated_at
+      ''',
+      <Object?>[
+        key,
+        domain,
+        iconUrl,
+        localIconPath,
+        category,
+        now.toIso8601String(),
+        now.toIso8601String(),
+      ],
+    );
+
+    debugPrint('[DB] upsertMerchant name=$key');
+    return (await getMerchantByName(key))!;
+  }
+
+  /// Updates only the local_icon_path for an existing merchant.
+  Future<void> updateMerchantLocalIcon(String name, String localPath) async {
+    final key = _normaliseMerchantKey(name);
+    final db = await database;
+    await db.update(
+      tableMerchants,
+      <String, Object?>{
+        'local_icon_path': localPath,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'name = ?',
+      whereArgs: <Object>[key],
+    );
+    debugPrint('[DB] updateMerchantLocalIcon name=$key path=$localPath');
+  }
+
+  String _normaliseMerchantKey(String name) =>
+      name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
   // ── Confirmation migration ─────────────────────────────────────────────────
 
